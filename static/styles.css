@@ -541,6 +541,18 @@ th {
   color: #3e394e;
 }
 
+.site-footer {
+  margin: 20px 0 0;
+  padding: 18px 4px 6px;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.site-footer p {
+  margin: 0 0 8px;
+}
+
 @media (max-width: 860px) {
   .two,
   .three,
