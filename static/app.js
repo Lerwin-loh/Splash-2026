@@ -19,6 +19,7 @@ const errorBox = document.getElementById("errorBox");
 const resultsSection = document.getElementById("resultsSection");
 const summaryCards = document.getElementById("summaryCards");
 const downloadLink = document.getElementById("downloadLink");
+const domains = JSON.parse(document.getElementById("domainData").textContent);
 
 let selectedFile = null;
 let inspectData = null;
@@ -115,7 +116,7 @@ function renderValidation() {
     <div class="validation-row full"><span>Mentor totals match</span><strong class="${sum === total ? "ok" : "bad"}">${sum === total ? "Yes" : "No"}</strong></div>
     <div class="validation-row compact"><span>Estimated Group 1 size</span><strong>${group1}</strong></div>
     <div class="validation-row compact"><span>Estimated Group 2 size</span><strong>${group2}</strong></div>
-    ${window.DOMAINS.map((domain) => `<div class="validation-row compact"><span>${domain} initial capacity</span><strong>${counts[domain] * 5}</strong></div>`).join("")}
+    ${domains.map((domain) => `<div class="validation-row compact"><span>${domain} initial capacity</span><strong>${counts[domain] * 5}</strong></div>`).join("")}
     <div class="validation-row compact"><span>Initial total capacity per group</span><strong>${initialTotalCapacity}</strong></div>
     <div class="validation-row full">
       <span class="label-with-info">

@@ -1,13 +1,18 @@
 :root {
-  --ink: #1c2630;
-  --muted: #627082;
-  --line: #d9e0e8;
-  --soft: #f6f8fb;
-  --brand: #0f6ea8;
-  --brand-dark: #0b547f;
+  --ink: #202239;
+  --muted: #6b6478;
+  --line: #eaddea;
+  --soft: #fff7fb;
+  --brand: #176fa8;
+  --brand-dark: #0d517d;
+  --accent: #d9368a;
+  --accent-soft: #ffe8f4;
+  --lavender: #f2ecff;
+  --mint: #e9fbf7;
   --ok: #177245;
   --warn: #9a6700;
   --bad: #b42318;
+  --shadow: 0 18px 45px rgba(63, 51, 80, 0.1);
 }
 
 * {
@@ -23,19 +28,39 @@ body {
   width: 100%;
   overflow-x: hidden;
   color: var(--ink);
-  font-family: Arial, Helvetica, sans-serif;
-  background: #eef2f6;
+  font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+  background:
+    radial-gradient(circle at 10% 0%, rgba(255, 215, 235, 0.9), transparent 30%),
+    radial-gradient(circle at 92% 8%, rgba(210, 236, 255, 0.95), transparent 28%),
+    linear-gradient(180deg, #fffafe 0%, #eef7fb 52%, #fff9fd 100%);
 }
 
 .topbar {
-  background: #ffffff;
-  border-bottom: 1px solid var(--line);
-  padding: 22px 28px;
+  position: relative;
+  overflow: hidden;
+  background: transparent;
+  border-bottom: 0;
+  padding: 30px 28px;
+  color: var(--ink);
+}
+
+.topbar::after {
+  content: none;
+}
+
+.topbar > div {
+  position: relative;
+  z-index: 1;
+  width: min(1120px, 100%);
+  margin: 0 auto;
 }
 
 .topbar h1 {
   margin: 0 0 6px;
-  font-size: 28px;
+  font-size: 32px;
+  letter-spacing: 0;
+  color: #1d2540;
+  text-shadow: none;
 }
 
 .topbar p {
@@ -45,20 +70,26 @@ body {
 
 .container {
   width: min(1120px, calc(100% - 28px));
-  margin: 20px auto 40px;
+  margin: 10px auto 40px;
+  position: relative;
+  z-index: 1;
 }
 
 .notice,
 .panel {
-  background: #ffffff;
+  background: rgba(255, 255, 255, 0.9);
   border: 1px solid var(--line);
   border-radius: 8px;
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(8px);
 }
 
 .notice {
-  padding: 12px 14px;
+  padding: 14px 16px;
   margin-bottom: 14px;
-  color: #3d4b58;
+  color: #4d435a;
+  background: linear-gradient(90deg, #ffffff, var(--accent-soft));
+  border-left: 5px solid var(--accent);
 }
 
 .panel {
@@ -78,12 +109,13 @@ body {
 }
 
 .step {
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   display: grid;
   place-items: center;
   border-radius: 50%;
-  background: var(--brand);
+  background: linear-gradient(135deg, var(--brand), var(--accent));
+  box-shadow: 0 8px 18px rgba(217, 54, 138, 0.24);
   color: #ffffff;
   font-weight: 700;
 }
@@ -91,12 +123,13 @@ body {
 h2 {
   margin: 3px 0 14px;
   font-size: 20px;
+  color: #17192d;
 }
 
 label {
   display: grid;
   gap: 6px;
-  color: #334050;
+  color: #3d3850;
   font-weight: 700;
   font-size: 14px;
   min-width: 0;
@@ -106,17 +139,25 @@ input,
 select {
   width: 100%;
   min-height: 40px;
-  border: 1px solid #c8d2dd;
+  border: 1px solid #ddcfe2;
   border-radius: 6px;
   padding: 8px 10px;
   color: var(--ink);
   background: #ffffff;
   font: inherit;
   font-weight: 400;
+  transition: border-color 120ms ease, box-shadow 120ms ease, background 120ms ease;
+}
+
+input:focus,
+select:focus {
+  outline: 0;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 4px rgba(217, 54, 138, 0.14);
 }
 
 input[readonly] {
-  background: var(--soft);
+  background: linear-gradient(90deg, var(--soft), #f5fbff);
 }
 
 .grid {
@@ -148,16 +189,26 @@ input[readonly] {
   max-width: 100%;
   min-height: 120px;
   place-items: center;
-  border: 2px dashed #9fb2c5;
+  border: 2px dashed #d792bd;
   border-radius: 8px;
-  background: var(--soft);
+  background:
+    linear-gradient(135deg, rgba(255, 232, 244, 0.95), rgba(233, 246, 255, 0.95));
   cursor: pointer;
   text-align: center;
+  color: #32283b;
+  font-weight: 700;
+  transition: transform 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.drop-zone:hover {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px rgba(217, 54, 138, 0.18);
 }
 
 .drop-zone.dragging {
   border-color: var(--brand);
-  background: #eaf5fb;
+  background: #eef8ff;
+  transform: translateY(-1px);
 }
 
 .drop-zone input {
@@ -176,6 +227,7 @@ input[readonly] {
   gap: 16px;
   margin-top: 10px;
   color: var(--muted);
+  font-weight: 600;
 }
 
 .muted {
@@ -194,6 +246,7 @@ input[readonly] {
   margin-top: 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
+  background: #ffffff;
 }
 
 table {
@@ -202,7 +255,6 @@ table {
   font-size: 14px;
 }
 
-.preview-wrap table,
 .preview-wrap table {
   width: max-content;
   min-width: 100%;
@@ -219,7 +271,7 @@ td {
 }
 
 th {
-  background: var(--soft);
+  background: linear-gradient(90deg, var(--lavender), var(--soft));
   font-weight: 700;
 }
 
@@ -238,7 +290,7 @@ th {
   padding: 9px 10px;
   border: 1px solid var(--line);
   border-radius: 6px;
-  background: #ffffff;
+  background: linear-gradient(135deg, #ffffff, #fffafd);
   min-width: 0;
 }
 
@@ -276,7 +328,7 @@ th {
   height: 20px;
   border-radius: 50%;
   color: #ffffff;
-  background: var(--brand);
+  background: linear-gradient(135deg, var(--brand), var(--accent));
   font-size: 13px;
   font-weight: 700;
   line-height: 1;
@@ -343,27 +395,33 @@ th {
   padding: 10px;
   border: 1px solid #f3b5af;
   border-radius: 6px;
-  background: #fff3f1;
+  background: #fff3f6;
 }
 
 .primary {
   min-height: 42px;
   border: 0;
-  border-radius: 6px;
-  padding: 10px 16px;
+  border-radius: 999px;
+  padding: 10px 18px;
   color: #ffffff;
-  background: var(--brand);
+  background: linear-gradient(135deg, var(--brand), var(--accent));
   font-weight: 700;
   cursor: pointer;
+  box-shadow: 0 10px 22px rgba(23, 111, 168, 0.2);
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
 }
 
 .primary:hover {
-  background: var(--brand-dark);
+  filter: brightness(0.98);
+  transform: translateY(-1px);
+  box-shadow: 0 14px 28px rgba(217, 54, 138, 0.22);
 }
 
 .primary:disabled {
-  background: #9cafbd;
+  background: #b8b0bd;
+  box-shadow: none;
   cursor: not-allowed;
+  transform: none;
 }
 
 .loading {
@@ -382,10 +440,10 @@ th {
 }
 
 .card {
-  border: 1px solid var(--line);
+  border: 1px solid #ead8e7;
   border-radius: 8px;
   padding: 14px;
-  background: var(--soft);
+  background: linear-gradient(135deg, #ffffff, var(--soft));
   min-width: 0;
   overflow-wrap: anywhere;
 }
@@ -394,6 +452,7 @@ th {
   display: block;
   margin-top: 8px;
   font-size: 24px;
+  color: var(--accent);
 }
 
 .link-button {
@@ -407,6 +466,7 @@ th {
   margin: 0;
   padding-left: 22px;
   line-height: 1.55;
+  color: #3e394e;
 }
 
 @media (max-width: 860px) {

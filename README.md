@@ -100,7 +100,7 @@ Then follow the Vercel prompts. No database or environment variables are require
 
 ## File Privacy Behaviour
 
-Uploaded files are processed only for the current request. The application does not intentionally retain uploaded workbooks, does not use a database, and does not send applicant data to external APIs. Malformed files and unsupported file types are rejected with user-friendly errors.
+Uploaded files are processed only for the current request. The application does not retain uploaded workbooks, does not use a database, and does not send applicant data to external APIs. Malformed files and unsupported file types are rejected with user-friendly errors.
 
 ## Sample Workbook
 

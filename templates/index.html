@@ -16,7 +16,7 @@
 
   <main class="container">
     <section class="notice">
-      Uploaded files are processed only to generate the event allocation workbook and are not intentionally retained.
+      Uploaded files are processed only to generate the event allocation workbook and are not retained.
     </section>
 
     <section class="panel">
@@ -128,10 +128,9 @@
       </div>
     </section>
   </main>
+  </main>
 
-  <script>
-    window.DOMAINS = {{ domains | tojson }};
-  </script>
+  <script id="domainData" type="application/json">{{ domains | tojson }}</script>
   <script src="{{ url_for('static', filename='app.js') }}"></script>
 </body>
 </html>
