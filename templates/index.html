@@ -9,7 +9,10 @@
 <body>
   <header class="topbar">
     <div>
-      <h1>Splash Mentoring Allocation</h1>
+      <h1>
+        Splash Mentoring Allocation
+        <button id="howItWorksShortcut" class="header-info-button" type="button" aria-label="Open how allocation works">i</button>
+      </h1>
       <p>Upload registrations, configure mentor capacity, and download the allocated workbook.</p>
     </div>
   </header>
@@ -150,23 +153,30 @@
       </div>
     </section>
 
-    <section class="panel">
+    <section id="howItWorksSection" class="panel collapsible-panel">
       <div class="step">?</div>
       <div class="content">
-        <h2>How Allocation Works</h2>
-        <ol class="how-list">
-          <li>Applicants are placed alternately into Group 1 and Group 2 according to registration order.</li>
-          <li>Group 1 attends the panel discussion first, while Group 2 attends mentoring first.</li>
-          <li>The two groups then switch activities.</li>
-          <li>Each applicant is assigned to two different mentoring subdomains.</li>
-          <li>The application first attempts to provide the two highest-ranked available choices.</li>
-          <li>When a preferred subdomain is full, another ranked choice or available subdomain is used.</li>
-          <li>Mentor numbers are used only to control the total capacity of each subdomain.</li>
-          <li>Individual mentor assignments are not created.</li>
-          <li>Mentor capacity is reused because the two groups attend mentoring at different times.</li>
-          <li>The participant limit per mentor automatically increases only when necessary.</li>
-          <li>When continuing from a previous allocation, matched existing allocation fields are copied over unchanged.</li>
-        </ol>
+        <h2>
+          <button id="howItWorksToggle" class="section-toggle" type="button" aria-expanded="false" aria-controls="howItWorksBody">
+            <span>How Allocation Works</span>
+            <span class="toggle-icon">v</span>
+          </button>
+        </h2>
+        <div id="howItWorksBody" class="collapsible-body hidden">
+          <ol class="how-list">
+            <li>Applicants are placed alternately into Group 1 and Group 2 according to registration order.</li>
+            <li>Group 1 attends the panel discussion first, while Group 2 attends mentoring first.</li>
+            <li>The two groups then switch activities.</li>
+            <li>Each applicant is assigned to two different mentoring subdomains.</li>
+            <li>The application first attempts to provide the two highest-ranked available choices.</li>
+            <li>When a preferred subdomain is full, another ranked choice or available subdomain is used.</li>
+            <li>Mentor numbers are used only to control the total capacity of each subdomain.</li>
+            <li>Individual mentor assignments are not created.</li>
+            <li>Mentor capacity is reused because the two groups attend mentoring at different times.</li>
+            <li>The participant limit per mentor automatically increases only when necessary.</li>
+            <li>When continuing from a previous allocation, matched existing allocation fields are copied over unchanged.</li>
+          </ol>
+        </div>
       </div>
     </section>
 

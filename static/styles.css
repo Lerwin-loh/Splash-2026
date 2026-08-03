@@ -56,11 +56,38 @@ body {
 }
 
 .topbar h1 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
   margin: 0 0 6px;
   font-size: 32px;
   letter-spacing: 0;
   color: #1d2540;
   text-shadow: none;
+}
+
+.header-info-button {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 26px;
+  height: 26px;
+  border: 1px solid #d5c6dc;
+  border-radius: 50%;
+  color: #ffffff;
+  background: linear-gradient(135deg, var(--brand), var(--accent));
+  font: inherit;
+  font-size: 15px;
+  font-weight: 800;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 8px 18px rgba(217, 54, 138, 0.18);
+}
+
+.header-info-button:hover,
+.header-info-button:focus {
+  outline: 0;
+  box-shadow: 0 0 0 4px rgba(217, 54, 138, 0.14);
 }
 
 .topbar p {

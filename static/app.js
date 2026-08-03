@@ -4,6 +4,10 @@ const dropZone = document.getElementById("dropZone");
 const previousDropZone = document.getElementById("previousDropZone");
 const previousSectionToggle = document.getElementById("previousSectionToggle");
 const previousSectionBody = document.getElementById("previousSectionBody");
+const howItWorksShortcut = document.getElementById("howItWorksShortcut");
+const howItWorksToggle = document.getElementById("howItWorksToggle");
+const howItWorksBody = document.getElementById("howItWorksBody");
+const howItWorksSection = document.getElementById("howItWorksSection");
 const fileName = document.getElementById("fileName");
 const fileSize = document.getElementById("fileSize");
 const clearCurrentFileButton = document.getElementById("clearCurrentFileButton");
@@ -249,6 +253,12 @@ function setPreviousSectionOpen(open) {
   previousSectionToggle.querySelector(".toggle-icon").textContent = open ? "^" : "v";
 }
 
+function setHowItWorksOpen(open) {
+  howItWorksBody.classList.toggle("hidden", !open);
+  howItWorksToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  howItWorksToggle.querySelector(".toggle-icon").textContent = open ? "^" : "v";
+}
+
 fileInput.addEventListener("change", () => setFile(fileInput.files[0]));
 previousFileInput.addEventListener("change", () => setPreviousFile(previousFileInput.files[0]));
 clearCurrentFileButton.addEventListener("click", () => {
@@ -263,6 +273,13 @@ worksheetSelect.addEventListener("change", inspectWorkbook);
 previousWorksheetSelect.addEventListener("change", inspectPreviousWorkbook);
 previousSectionToggle.addEventListener("click", () => {
   setPreviousSectionOpen(previousSectionBody.classList.contains("hidden"));
+});
+howItWorksToggle.addEventListener("click", () => {
+  setHowItWorksOpen(howItWorksBody.classList.contains("hidden"));
+});
+howItWorksShortcut.addEventListener("click", () => {
+  setHowItWorksOpen(true);
+  howItWorksSection.scrollIntoView({ behavior: "smooth", block: "start" });
 });
 errorCloseButton.addEventListener("click", () => setError(""));
 
