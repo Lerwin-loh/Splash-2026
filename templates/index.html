@@ -19,10 +19,17 @@
       Uploaded files are processed only to generate the event allocation workbook and are not retained.
     </section>
 
+    <div id="errorBox" class="error hidden" role="alert">
+      <span class="error-icon">!</span>
+      <span id="errorText"></span>
+      <button id="errorCloseButton" class="error-close" type="button" aria-label="Dismiss error">x</button>
+    </div>
+
     <section class="panel">
       <div class="step">1</div>
       <div class="content">
         <h2>Upload Excel File</h2>
+        <div id="currentFileError" class="section-error hidden" role="alert"></div>
         <label id="dropZone" class="drop-zone">
           <input id="fileInput" type="file" accept=".xlsx">
           <span>Drop an .xlsx file here or choose a file</span>
@@ -30,6 +37,7 @@
         <div class="file-meta">
           <span id="fileName">No file selected</span>
           <span id="fileSize"></span>
+          <button id="clearCurrentFileButton" class="text-button hidden" type="button">Clear</button>
         </div>
         <div class="grid two">
           <label>Worksheet
@@ -57,12 +65,14 @@
         </h2>
         <div id="previousSectionBody" class="collapsible-body hidden">
           <p class="section-help"><strong>Optional.</strong> Upload a previously generated allocation workbook.</p>
+          <div id="previousFileError" class="section-error hidden" role="alert"></div>
           <label id="previousDropZone" class="drop-zone previous-drop-zone">
             <input id="previousFileInput" type="file" accept=".xlsx">
             <span>Drop previous allocated .xlsx file here or choose a file</span>
           </label>
           <div class="file-meta">
             <span id="previousFileName">No previous allocation selected</span>
+            <button id="clearPreviousFileButton" class="text-button hidden" type="button">Clear</button>
           </div>
           <div class="grid two">
             <label>Previous worksheet
@@ -72,6 +82,7 @@
               <input id="previousApplicantCount" type="text" readonly value="-">
             </label>
           </div>
+          <div id="previousSnapshotCards" class="snapshot-cards"></div>
         </div>
       </div>
     </section>
@@ -124,9 +135,9 @@
       <div class="step">5</div>
       <div class="content">
         <h2>Generate Allocation</h2>
+        <div id="processError" class="section-error hidden" role="alert"></div>
         <button id="generateButton" class="primary" disabled>Generate Allocation</button>
         <span id="loading" class="loading hidden">Processing workbook...</span>
-        <div id="errorBox" class="error hidden"></div>
       </div>
     </section>
 

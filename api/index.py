@@ -134,13 +134,32 @@ def inspect_previous_allocation(file_storage, sheet_name=None):
     df.columns = [str(column).strip() for column in df.columns]
     non_blank = df.apply(lambda row: any(str(value).strip() for value in row), axis=1)
     missing_columns = [column for column in GENERATED_COLUMNS if column not in df.columns]
+    allocated_df = df.loc[non_blank].copy()
+    snapshot = previous_allocation_snapshot(allocated_df) if not missing_columns else None
     return {
         "worksheets": excel_file.sheet_names,
         "selectedWorksheet": selected_sheet,
         "applicantCount": int(non_blank.sum()),
         "hasGeneratedColumns": not missing_columns,
         "missingColumns": missing_columns,
+        "snapshot": snapshot,
     }
+
+
+def previous_allocation_snapshot(df):
+    groups = {}
+    for group in ["Group 1", "Group 2"]:
+        group_df = df[df["Grouping"].astype(str).str.strip() == group]
+        usage = {domain: 0 for domain in DOMAIN_ORDER}
+        for column in ["Subdomain Allocation 1", "Subdomain Allocation 2"]:
+            for value in group_df[column].astype(str).str.strip():
+                if value in usage:
+                    usage[value] += 1
+        groups[group] = {
+            "participants": int(len(group_df)),
+            "usage": usage,
+        }
+    return {"groups": groups}
 
 
 def validate_config(max_applicants, total_mentors, mentor_counts):
@@ -359,6 +378,10 @@ def generated_values_from_previous(record):
     return {column: str(record.get(column, "")).strip() for column in PRESERVED_ALLOCATION_COLUMNS}
 
 
+def previous_record_key(record):
+    return identity_key(pd.Series(record))
+
+
 def usage_from_existing(existing_records):
     usage = {
         "Group 1": {domain: 0 for domain in DOMAIN_ORDER},
@@ -406,6 +429,7 @@ def process_allocation(df, mappings, max_applicants, total_mentors, mentor_count
     warnings.extend(previous_warnings)
 
     existing_records = []
+    matched_previous_keys = set()
     new_applicants = []
     allocation_lookup = {}
     next_new_number = len(previous_df) if previous_df is not None else 0
@@ -415,6 +439,9 @@ def process_allocation(df, mappings, max_applicants, total_mentors, mentor_count
         previous_record = match_previous_record(row, previous_lookup)
         if previous_record:
             existing_records.append(previous_record)
+            matched_key = previous_record_key(previous_record)
+            if matched_key:
+                matched_previous_keys.add(matched_key)
             allocation_lookup[applicant["applicant_number"]] = generated_values_from_previous(previous_record)
             continue
 
@@ -464,7 +491,19 @@ def process_allocation(df, mappings, max_applicants, total_mentors, mentor_count
     for column in GENERATED_COLUMNS[1:]:
         output_df[column] = [allocation_lookup.get(applicant["applicant_number"], {}).get(column, "Unable to allocate") for applicant in applicants]
 
+    if previous_df is not None:
+        missing_previous_rows = []
+        for _index, previous_row in previous_df.iterrows():
+            previous_record = previous_row.to_dict()
+            key = previous_record_key(previous_record)
+            if key and key in matched_previous_keys:
+                continue
+            missing_previous_rows.append(previous_record)
+        if missing_previous_rows:
+            output_df = pd.concat([output_df, pd.DataFrame(missing_previous_rows)], ignore_index=True, sort=False)
+
     analytics = build_analytics(applicants, total_mentors, mentor_counts, group_results, max_applicants, previous_df, existing_records, new_applicants)
+    analytics["previous_rows_appended"] = len(output_df) - len(df)
     analytics["capacity_warnings"] = build_existing_capacity_warnings(existing_usage, mentor_counts)
     return output_df, analytics, warnings
 
@@ -523,6 +562,7 @@ def make_summary_rows(analytics):
         ("Previous allocation rows read", analytics["previous_allocation_rows"]),
         ("Existing applicants matched", analytics["matched_existing_applicants"]),
         ("New applicants allocated", analytics["new_applicants_allocated"]),
+        ("Previous-only rows appended", analytics.get("previous_rows_appended", 0)),
         ("Capacity warnings", len(analytics.get("capacity_warnings", []))),
         ("Unallocated applicants", analytics["total_unsuccessful_applicants"]),
     ]
@@ -582,6 +622,9 @@ def index():
 def inspect_workbook():
     try:
         sheets, selected_sheet, df = load_sheet(request.files.get("file"), request.form.get("worksheet") or None)
+        generated_columns_present = [column for column in GENERATED_COLUMNS if column in df.columns]
+        if generated_columns_present:
+            raise ValueError("This looks like a generated allocation workbook. Upload it in 'Continue From Previous Allocation' instead.")
         return jsonify(
             {
                 "worksheets": sheets,
@@ -613,6 +656,8 @@ def process_workbook():
         max_applicants = int(request.form.get("maxApplicants", 400))
         total_mentors = int(request.form.get("totalMentors", 30))
         _, _, df = load_sheet(request.files.get("file"), request.form.get("worksheet") or None)
+        if any(column in df.columns for column in GENERATED_COLUMNS):
+            raise ValueError("The current registration upload looks like a generated allocation workbook. Please upload the latest raw registration export in Step 1.")
         previous_df = load_previous_allocations(request.files.get("previousFile"), request.form.get("previousWorksheet") or None)
         output_df, analytics, warnings = process_allocation(df, mappings, max_applicants, total_mentors, mentor_counts, previous_df)
         workbook = build_workbook(output_df, analytics, warnings)

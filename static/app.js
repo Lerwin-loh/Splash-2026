@@ -6,9 +6,12 @@ const previousSectionToggle = document.getElementById("previousSectionToggle");
 const previousSectionBody = document.getElementById("previousSectionBody");
 const fileName = document.getElementById("fileName");
 const fileSize = document.getElementById("fileSize");
+const clearCurrentFileButton = document.getElementById("clearCurrentFileButton");
 const previousFileName = document.getElementById("previousFileName");
+const clearPreviousFileButton = document.getElementById("clearPreviousFileButton");
 const previousWorksheetSelect = document.getElementById("previousWorksheetSelect");
 const previousApplicantCount = document.getElementById("previousApplicantCount");
+const previousSnapshotCards = document.getElementById("previousSnapshotCards");
 const worksheetSelect = document.getElementById("worksheetSelect");
 const applicantCountInput = document.getElementById("applicantCount");
 const columnsBox = document.getElementById("columnsBox");
@@ -23,6 +26,11 @@ const validationBox = document.getElementById("validationBox");
 const generateButton = document.getElementById("generateButton");
 const loading = document.getElementById("loading");
 const errorBox = document.getElementById("errorBox");
+const errorText = document.getElementById("errorText");
+const errorCloseButton = document.getElementById("errorCloseButton");
+const currentFileError = document.getElementById("currentFileError");
+const previousFileError = document.getElementById("previousFileError");
+const processError = document.getElementById("processError");
 const resultsSection = document.getElementById("resultsSection");
 const summaryCards = document.getElementById("summaryCards");
 const downloadLink = document.getElementById("downloadLink");
@@ -42,6 +50,7 @@ function clearDownloadState() {
 }
 
 function clearCurrentInspection() {
+  setSectionError(currentFileError, "");
   inspectData = null;
   worksheetSelect.innerHTML = "";
   applicantCountInput.value = "-";
@@ -54,8 +63,10 @@ function clearCurrentInspection() {
 }
 
 function clearPreviousInspection() {
+  setSectionError(previousFileError, "");
   previousApplicantCount.value = "-";
   previousWorksheetSelect.innerHTML = "";
+  previousSnapshotCards.innerHTML = "";
   clearDownloadState();
 }
 
@@ -93,8 +104,13 @@ function mappingValues() {
 }
 
 function setError(message) {
-  errorBox.textContent = message || "";
+  errorText.textContent = message || "";
   errorBox.classList.toggle("hidden", !message);
+}
+
+function setSectionError(element, message) {
+  element.textContent = message || "";
+  element.classList.toggle("hidden", !message);
 }
 
 function addOptions(select, columns, selected) {
@@ -175,13 +191,14 @@ function renderValidation() {
 async function inspectWorkbook() {
   if (!selectedFile) return;
   setError("");
+  setSectionError(currentFileError, "");
   const formData = new FormData();
   formData.append("file", selectedFile);
   if (worksheetSelect.value) formData.append("worksheet", worksheetSelect.value);
   const response = await fetch("/api/inspect", { method: "POST", body: formData });
   const data = await response.json();
   if (!response.ok) {
-    setError(data.error || "Unable to inspect workbook.");
+    setSectionError(currentFileError, data.error || "Unable to inspect workbook.");
     return;
   }
   inspectData = data;
@@ -205,8 +222,10 @@ async function inspectWorkbook() {
 function setFile(file) {
   selectedFile = file;
   clearCurrentInspection();
+  dropZone.classList.toggle("has-file", Boolean(file));
   fileName.textContent = file ? file.name : "No file selected";
   fileSize.textContent = file ? formatBytes(file.size) : "";
+  clearCurrentFileButton.classList.toggle("hidden", !file);
   if (file) inspectWorkbook();
   renderValidation();
 }
@@ -214,9 +233,11 @@ function setFile(file) {
 function setPreviousFile(file) {
   previousFile = file || null;
   clearPreviousInspection();
+  previousDropZone.classList.toggle("has-file", Boolean(file));
   previousFileName.textContent = file
     ? `${file.name} (${formatBytes(file.size)})`
     : "No previous allocation selected";
+  clearPreviousFileButton.classList.toggle("hidden", !file);
   if (file) setPreviousSectionOpen(true);
   if (file) inspectPreviousWorkbook();
   renderValidation();
@@ -230,11 +251,20 @@ function setPreviousSectionOpen(open) {
 
 fileInput.addEventListener("change", () => setFile(fileInput.files[0]));
 previousFileInput.addEventListener("change", () => setPreviousFile(previousFileInput.files[0]));
+clearCurrentFileButton.addEventListener("click", () => {
+  fileInput.value = "";
+  setFile(null);
+});
+clearPreviousFileButton.addEventListener("click", () => {
+  previousFileInput.value = "";
+  setPreviousFile(null);
+});
 worksheetSelect.addEventListener("change", inspectWorkbook);
 previousWorksheetSelect.addEventListener("change", inspectPreviousWorkbook);
 previousSectionToggle.addEventListener("click", () => {
   setPreviousSectionOpen(previousSectionBody.classList.contains("hidden"));
 });
+errorCloseButton.addEventListener("click", () => setError(""));
 
 dropZone.addEventListener("dragover", (event) => {
   event.preventDefault();
@@ -269,13 +299,14 @@ previousDropZone.addEventListener("drop", (event) => {
 async function inspectPreviousWorkbook() {
   if (!previousFile) return;
   setError("");
+  setSectionError(previousFileError, "");
   const formData = new FormData();
   formData.append("previousFile", previousFile);
   if (previousWorksheetSelect.value) formData.append("previousWorksheet", previousWorksheetSelect.value);
   const response = await fetch("/api/inspect-previous", { method: "POST", body: formData });
   const data = await response.json();
   if (!response.ok) {
-    setError(data.error || "Unable to inspect previous allocation workbook.");
+    setSectionError(previousFileError, data.error || "Unable to inspect previous allocation workbook.");
     return;
   }
   previousWorksheetSelect.innerHTML = "";
@@ -288,9 +319,26 @@ async function inspectPreviousWorkbook() {
   });
   previousApplicantCount.value = data.applicantCount;
   if (!data.hasGeneratedColumns) {
-    setError(`Previous worksheet is missing generated columns: ${data.missingColumns.join(", ")}`);
+    setSectionError(previousFileError, `Previous worksheet is missing generated columns: ${data.missingColumns.join(", ")}`);
   }
+  renderPreviousSnapshot(data.snapshot);
   renderValidation();
+}
+
+function renderPreviousSnapshot(snapshot) {
+  previousSnapshotCards.innerHTML = "";
+  if (!snapshot) return;
+  const cards = [];
+  ["Group 1", "Group 2"].forEach((group) => {
+    const groupData = snapshot.groups[group];
+    cards.push([`${group} total pax`, groupData.participants]);
+    domains.forEach((domain) => {
+      cards.push([`${group} ${domain}`, groupData.usage[domain]]);
+    });
+  });
+  previousSnapshotCards.innerHTML = cards
+    .map(([label, value]) => `<div class="snapshot-card"><span>${label}</span><strong>${value}</strong></div>`)
+    .join("");
 }
 
 document.querySelectorAll("input, select").forEach((element) => {
@@ -314,6 +362,7 @@ function renderResults(analytics) {
     ["Previously allocated rows", analytics.previous_allocation_rows],
     ["Existing applicants matched", analytics.matched_existing_applicants],
     ["New applicants allocated", analytics.new_applicants_allocated],
+    ["Previous-only rows appended", analytics.previous_rows_appended || 0],
     ["Unallocated applicants", analytics.total_unsuccessful_applicants],
   ];
   summaryCards.innerHTML = cards.map(([label, value]) => `<div class="card"><span>${label}</span><strong>${value}</strong></div>`).join("");
@@ -331,6 +380,7 @@ function renderResults(analytics) {
 generateButton.addEventListener("click", async () => {
   if (!selectedFile) return;
   setError("");
+  setSectionError(processError, "");
   loading.classList.remove("hidden");
   generateButton.disabled = true;
   const formData = new FormData();
@@ -357,7 +407,7 @@ generateButton.addEventListener("click", async () => {
     const analytics = JSON.parse(atob(response.headers.get("X-Allocation-Analytics")));
     renderResults(analytics);
   } catch (error) {
-    setError(error.message);
+    setSectionError(processError, error.message);
   } finally {
     loading.classList.add("hidden");
     renderValidation();

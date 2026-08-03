@@ -264,6 +264,34 @@ def test_successful_excel_download_response():
     assert workbook.sheetnames == ["Allocated Applicants", "Allocation Summary"]
 
 
+def test_generated_workbook_rejected_as_current_upload_in_inspect():
+    client = app.test_client()
+    allocated, _, _ = process_allocation(fake_df(2), MAPPINGS, 400, 8, MENTORS)
+    response = client.post(
+        "/api/inspect",
+        data={"file": (workbook_bytes({"Allocated Applicants": allocated}), "allocated.xlsx")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 400
+    assert "generated allocation workbook" in response.get_json()["error"]
+
+
+def test_generated_workbook_rejected_as_current_upload_in_process():
+    client = app.test_client()
+    allocated, _, _ = process_allocation(fake_df(2), MAPPINGS, 400, 8, MENTORS)
+    data = {
+        "file": (workbook_bytes({"Allocated Applicants": allocated}), "allocated.xlsx"),
+        "worksheet": "Allocated Applicants",
+        "mappings": json_dumps(MAPPINGS),
+        "maxApplicants": "400",
+        "totalMentors": "8",
+        "mentorCounts": json_dumps(MENTORS),
+    }
+    response = client.post("/api/process", data=data, content_type="multipart/form-data")
+    assert response.status_code == 400
+    assert "generated allocation workbook" in response.get_json()["error"]
+
+
 def test_previous_allocation_inspect_returns_worksheet_and_count():
     client = app.test_client()
     allocated, analytics, warnings = process_allocation(fake_df(4), MAPPINGS, 400, 8, MENTORS)
@@ -278,6 +306,8 @@ def test_previous_allocation_inspect_returns_worksheet_and_count():
     assert data["selectedWorksheet"] == "Allocated Applicants"
     assert data["applicantCount"] == 4
     assert data["hasGeneratedColumns"] is True
+    assert data["snapshot"]["groups"]["Group 1"]["participants"] == 2
+    assert set(data["snapshot"]["groups"]["Group 1"]["usage"]) == set(DOMAIN_ORDER)
 
 
 def test_previous_allocations_are_preserved_for_matched_applicants():
@@ -337,6 +367,19 @@ def test_previous_rows_are_source_of_truth_after_manual_removal():
     assert analytics["previous_allocation_rows"] == 3
     assert analytics["matched_existing_applicants"] == 3
     assert output.loc[3, "Applicant Number"] == 4
+
+
+def test_previous_only_rows_are_appended_to_final_output():
+    previous_allocated, _, _ = process_allocation(fake_df(3), MAPPINGS, 400, 8, MENTORS)
+    current_upload = fake_df(2)
+
+    output, analytics, _ = process_allocation(current_upload, MAPPINGS, 400, 8, MENTORS, previous_allocated)
+
+    assert len(output) == 3
+    assert analytics["matched_existing_applicants"] == 2
+    assert analytics["previous_rows_appended"] == 1
+    assert output.iloc[2]["Personal Email"] == previous_allocated.iloc[2]["Personal Email"]
+    assert output.iloc[2]["Subdomain Allocation 1"] == previous_allocated.iloc[2]["Subdomain Allocation 1"]
 
 
 def test_decreased_capacity_warns_without_changing_existing_allocations():

@@ -72,7 +72,7 @@ When processing registrations in batches, upload the newest registration workboo
 
 The app reads the previous workbook row by row from the `Allocated Applicants` sheet. It does not rely on old summary statistics. If rows were manually removed from the previous workbook, those removed rows no longer count.
 
-Applicants are matched only when surname, given name, mobile number, and personal email all match after normalisation. Existing matched applicants keep their previous generated allocation fields exactly as-is. Those fields are never recalculated or changed during batch continuation. Only new unmatched applicants are allocated.
+Applicants are matched only when surname, given name, mobile number, and personal email all match after normalisation. Existing matched applicants keep their previous generated allocation fields exactly as-is. Those fields are never recalculated or changed during batch continuation. Only new unmatched applicants are allocated. If the previous allocation workbook contains allocated rows that are missing from the current registration upload, those previous-only rows are appended to the final workbook unchanged.
 
 Current mentor counts from the frontend are always used. If mentor capacity has increased, new capacity is available for new applicants. If mentor capacity has decreased, existing allocations are not changed; the app reports capacity warnings when previous allocations already exceed the expected capacity.
 
