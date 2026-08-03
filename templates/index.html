@@ -46,8 +46,38 @@
       </div>
     </section>
 
-    <section class="panel">
+    <section class="panel collapsible-panel">
       <div class="step">2</div>
+      <div class="content">
+        <h2>
+          <button id="previousSectionToggle" class="section-toggle" type="button" aria-expanded="false" aria-controls="previousSectionBody">
+            <span>Continue From Previous Allocation</span>
+            <span class="toggle-icon">v</span>
+          </button>
+        </h2>
+        <div id="previousSectionBody" class="collapsible-body hidden">
+          <p class="section-help"><strong>Optional.</strong> Upload a previously generated allocation workbook.</p>
+          <label id="previousDropZone" class="drop-zone previous-drop-zone">
+            <input id="previousFileInput" type="file" accept=".xlsx">
+            <span>Drop previous allocated .xlsx file here or choose a file</span>
+          </label>
+          <div class="file-meta">
+            <span id="previousFileName">No previous allocation selected</span>
+          </div>
+          <div class="grid two">
+            <label>Previous worksheet
+              <select id="previousWorksheetSelect"></select>
+            </label>
+            <label>Previously allocated rows detected
+              <input id="previousApplicantCount" type="text" readonly value="-">
+            </label>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="step">3</div>
       <div class="content">
         <h2>Map Excel Columns</h2>
         <div class="grid three">
@@ -65,7 +95,7 @@
     </section>
 
     <section class="panel">
-      <div class="step">3</div>
+      <div class="step">4</div>
       <div class="content">
         <h2>Configure Event</h2>
         <div class="grid three">
@@ -91,7 +121,7 @@
     </section>
 
     <section class="panel">
-      <div class="step">4</div>
+      <div class="step">5</div>
       <div class="content">
         <h2>Generate Allocation</h2>
         <button id="generateButton" class="primary" disabled>Generate Allocation</button>
@@ -101,7 +131,7 @@
     </section>
 
     <section id="resultsSection" class="panel hidden">
-      <div class="step">5</div>
+      <div class="step">6</div>
       <div class="content">
         <h2>Results Dashboard</h2>
         <div id="summaryCards" class="cards"></div>
@@ -124,10 +154,10 @@
           <li>Individual mentor assignments are not created.</li>
           <li>Mentor capacity is reused because the two groups attend mentoring at different times.</li>
           <li>The participant limit per mentor automatically increases only when necessary.</li>
+          <li>When continuing from a previous allocation, matched existing allocation fields are copied over unchanged.</li>
         </ol>
       </div>
     </section>
-  </main>
   </main>
 
   <script id="domainData" type="application/json">{{ domains | tojson }}</script>

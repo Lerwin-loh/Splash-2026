@@ -41,6 +41,7 @@ def fake_df(count=4, prefs=None):
                 "Surname": f"Tester{index + 1}",
                 "Given Name": f"Applicant{index + 1}",
                 "Mobile Number": f"0987{index + 1:04d}",
+                "Personal Email": f"applicant{index + 1}@example.com",
                 "Membership Number": f"00{index + 1:04d}",
                 "1st Option": first,
                 "2nd Option": second,
@@ -261,6 +262,98 @@ def test_successful_excel_download_response():
     assert response.headers["X-Allocation-Analytics"]
     workbook = load_workbook(BytesIO(response.data))
     assert workbook.sheetnames == ["Allocated Applicants", "Allocation Summary"]
+
+
+def test_previous_allocation_inspect_returns_worksheet_and_count():
+    client = app.test_client()
+    allocated, analytics, warnings = process_allocation(fake_df(4), MAPPINGS, 400, 8, MENTORS)
+    workbook = workbook_bytes({"Allocated Applicants": allocated})
+    response = client.post(
+        "/api/inspect-previous",
+        data={"previousFile": (workbook, "previous.xlsx")},
+        content_type="multipart/form-data",
+    )
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["selectedWorksheet"] == "Allocated Applicants"
+    assert data["applicantCount"] == 4
+    assert data["hasGeneratedColumns"] is True
+
+
+def test_previous_allocations_are_preserved_for_matched_applicants():
+    first_batch, _, _ = process_allocation(fake_df(3), MAPPINGS, 400, 8, MENTORS)
+    new_upload = fake_df(4)
+    new_upload.loc[3, "Mobile Number"] = "099999999"
+    new_upload.loc[3, "Personal Email"] = "new@example.com"
+
+    output, analytics, _ = process_allocation(new_upload, MAPPINGS, 400, 8, MENTORS, first_batch)
+
+    assert output.loc[0, "Subdomain Allocation 1"] == first_batch.loc[0, "Subdomain Allocation 1"]
+    assert output.loc[0, "Subdomain Allocation 2"] == first_batch.loc[0, "Subdomain Allocation 2"]
+    assert analytics["matched_existing_applicants"] == 3
+    assert analytics["new_applicants_allocated"] == 1
+
+
+def test_matched_existing_generated_fields_are_ported_exactly():
+    first_batch, _, _ = process_allocation(fake_df(1), MAPPINGS, 400, 8, MENTORS)
+    first_batch.loc[0, "Applicant Number"] = 88
+    first_batch.loc[0, "Grouping"] = "Group 2"
+    first_batch.loc[0, "Event Sequence"] = "Mentoring -> Panel Discussion"
+    first_batch.loc[0, "Subdomain Allocation 1"] = "Artificial Intelligence"
+    first_batch.loc[0, "Subdomain Allocation 2"] = "Cloud Computing"
+    first_batch.loc[0, "Allocation Status"] = "Manual preserved status"
+    first_batch.loc[0, "Attending"] = "Panel Discussion; Artificial Intelligence Mentoring; Cloud Computing Mentoring"
+
+    output, analytics, _ = process_allocation(fake_df(1), MAPPINGS, 400, 8, MENTORS, first_batch)
+
+    for column in GENERATED_COLUMNS:
+        assert str(output.loc[0, column]) == str(first_batch.loc[0, column])
+    assert analytics["matched_existing_applicants"] == 1
+    assert analytics["new_applicants_allocated"] == 0
+
+
+def test_previous_allocations_do_not_match_when_mobile_or_email_changes():
+    first_batch, _, _ = process_allocation(fake_df(1), MAPPINGS, 400, 8, MENTORS)
+    new_upload = fake_df(1)
+    new_upload.loc[0, "Mobile Number"] = "099999999"
+    new_upload.loc[0, "Personal Email"] = "changed@example.com"
+
+    output, analytics, _ = process_allocation(new_upload, MAPPINGS, 400, 8, MENTORS, first_batch)
+
+    assert output.loc[0, "Allocation Status"] == "Allocated"
+    assert analytics["matched_existing_applicants"] == 0
+    assert analytics["new_applicants_allocated"] == 1
+
+
+def test_previous_rows_are_source_of_truth_after_manual_removal():
+    first_batch, _, _ = process_allocation(fake_df(5), MAPPINGS, 400, 8, MENTORS)
+    manually_trimmed = first_batch.head(3).copy()
+    new_upload = fake_df(4)
+    new_upload.loc[3, "Mobile Number"] = "099999999"
+    new_upload.loc[3, "Personal Email"] = "new@example.com"
+
+    output, analytics, _ = process_allocation(new_upload, MAPPINGS, 400, 8, MENTORS, manually_trimmed)
+
+    assert analytics["previous_allocation_rows"] == 3
+    assert analytics["matched_existing_applicants"] == 3
+    assert output.loc[3, "Applicant Number"] == 4
+
+
+def test_decreased_capacity_warns_without_changing_existing_allocations():
+    previous = fake_df(12, [("Cybersecurity", "Quantum Computing", "Cloud Computing")])
+    previous_allocated, _, _ = process_allocation(previous, MAPPINGS, 400, 8, MENTORS)
+    new_upload = previous.copy()
+    reduced_mentors = {
+        "Cybersecurity": 1,
+        "Quantum Computing": 1,
+        "Cloud Computing": 0,
+        "Artificial Intelligence": 0,
+    }
+
+    output, analytics, _ = process_allocation(new_upload, MAPPINGS, 400, 2, reduced_mentors, previous_allocated)
+
+    assert output["Subdomain Allocation 1"].tolist() == previous_allocated["Subdomain Allocation 1"].tolist()
+    assert analytics["capacity_warnings"]
 
 
 def test_invalid_file_extension_rejected_by_inspect():

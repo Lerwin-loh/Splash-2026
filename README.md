@@ -5,6 +5,7 @@ A small Flask web application for allocating event applicants into two main grou
 ## Features
 
 - Upload an `.xlsx` registration workbook.
+- Optionally upload a previously generated allocation workbook for batch continuation.
 - Inspect worksheets, detected columns, applicant count, and the first five rows.
 - Confirm or change the three preference columns.
 - Configure maximum applicants and mentor counts by subdomain.
@@ -64,6 +65,16 @@ Mentor names are not needed. Mentor counts only define capacity:
 `subdomain capacity = mentors in subdomain x participants per mentor`
 
 The starting participants-per-mentor limit is 5. If a group cannot be fully allocated, the app increases the limit by 1 and retries. Group 1 and Group 2 are calculated independently because the same mentor capacity is reused across the two mentoring sessions.
+
+## Batch Continuation
+
+When processing registrations in batches, upload the newest registration workbook and optionally upload a previously generated allocation workbook.
+
+The app reads the previous workbook row by row from the `Allocated Applicants` sheet. It does not rely on old summary statistics. If rows were manually removed from the previous workbook, those removed rows no longer count.
+
+Applicants are matched only when surname, given name, mobile number, and personal email all match after normalisation. Existing matched applicants keep their previous generated allocation fields exactly as-is. Those fields are never recalculated or changed during batch continuation. Only new unmatched applicants are allocated.
+
+Current mentor counts from the frontend are always used. If mentor capacity has increased, new capacity is available for new applicants. If mentor capacity has decreased, existing allocations are not changed; the app reports capacity warnings when previous allocations already exceed the expected capacity.
 
 ## Local Setup
 

@@ -1,7 +1,14 @@
 const fileInput = document.getElementById("fileInput");
+const previousFileInput = document.getElementById("previousFileInput");
 const dropZone = document.getElementById("dropZone");
+const previousDropZone = document.getElementById("previousDropZone");
+const previousSectionToggle = document.getElementById("previousSectionToggle");
+const previousSectionBody = document.getElementById("previousSectionBody");
 const fileName = document.getElementById("fileName");
 const fileSize = document.getElementById("fileSize");
+const previousFileName = document.getElementById("previousFileName");
+const previousWorksheetSelect = document.getElementById("previousWorksheetSelect");
+const previousApplicantCount = document.getElementById("previousApplicantCount");
 const worksheetSelect = document.getElementById("worksheetSelect");
 const applicantCountInput = document.getElementById("applicantCount");
 const columnsBox = document.getElementById("columnsBox");
@@ -22,8 +29,35 @@ const downloadLink = document.getElementById("downloadLink");
 const domains = JSON.parse(document.getElementById("domainData").textContent);
 
 let selectedFile = null;
+let previousFile = null;
 let inspectData = null;
 let downloadUrl = null;
+
+function clearDownloadState() {
+  if (downloadUrl) URL.revokeObjectURL(downloadUrl);
+  downloadUrl = null;
+  downloadLink.removeAttribute("href");
+  resultsSection.classList.add("hidden");
+  summaryCards.innerHTML = "";
+}
+
+function clearCurrentInspection() {
+  inspectData = null;
+  worksheetSelect.innerHTML = "";
+  applicantCountInput.value = "-";
+  columnsBox.textContent = "";
+  previewTable.innerHTML = "";
+  [firstColumn, secondColumn, thirdColumn].forEach((select) => {
+    select.innerHTML = '<option value="">Choose column</option>';
+  });
+  clearDownloadState();
+}
+
+function clearPreviousInspection() {
+  previousApplicantCount.value = "-";
+  previousWorksheetSelect.innerHTML = "";
+  clearDownloadState();
+}
 
 function formatBytes(bytes) {
   if (!bytes) return "";
@@ -35,6 +69,11 @@ function formatBytes(bytes) {
     unit += 1;
   }
   return `${value.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
+function safeNumber(value) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : 0;
 }
 
 function mentorCounts() {
@@ -101,6 +140,7 @@ function renderValidation() {
   const sum = Object.values(counts).reduce((acc, value) => acc + value, 0);
   const activeDomains = Object.values(counts).filter((value) => value > 0).length;
   const applicants = inspectData ? inspectData.applicantCount : 0;
+  const previousRows = safeNumber(previousApplicantCount.value);
   const group1 = Math.ceil(applicants / 2);
   const group2 = Math.floor(applicants / 2);
   const initialTotalCapacity = sum * 5;
@@ -114,6 +154,8 @@ function renderValidation() {
     <div class="validation-row full"><span>Total configured mentors</span><strong>${total}</strong></div>
     <div class="validation-row full"><span>Sum across subdomains</span><strong class="${sum === total ? "ok" : "bad"}">${sum}</strong></div>
     <div class="validation-row full"><span>Mentor totals match</span><strong class="${sum === total ? "ok" : "bad"}">${sum === total ? "Yes" : "No"}</strong></div>
+    <div class="validation-row compact"><span>Current registration rows</span><strong>${applicants}</strong></div>
+    <div class="validation-row compact"><span>Previous allocation rows</span><strong>${previousRows}</strong></div>
     <div class="validation-row compact"><span>Estimated Group 1 size</span><strong>${group1}</strong></div>
     <div class="validation-row compact"><span>Estimated Group 2 size</span><strong>${group2}</strong></div>
     ${domains.map((domain) => `<div class="validation-row compact"><span>${domain} initial capacity</span><strong>${counts[domain] * 5}</strong></div>`).join("")}
@@ -162,15 +204,37 @@ async function inspectWorkbook() {
 
 function setFile(file) {
   selectedFile = file;
-  inspectData = null;
+  clearCurrentInspection();
   fileName.textContent = file ? file.name : "No file selected";
   fileSize.textContent = file ? formatBytes(file.size) : "";
   if (file) inspectWorkbook();
   renderValidation();
 }
 
+function setPreviousFile(file) {
+  previousFile = file || null;
+  clearPreviousInspection();
+  previousFileName.textContent = file
+    ? `${file.name} (${formatBytes(file.size)})`
+    : "No previous allocation selected";
+  if (file) setPreviousSectionOpen(true);
+  if (file) inspectPreviousWorkbook();
+  renderValidation();
+}
+
+function setPreviousSectionOpen(open) {
+  previousSectionBody.classList.toggle("hidden", !open);
+  previousSectionToggle.setAttribute("aria-expanded", open ? "true" : "false");
+  previousSectionToggle.querySelector(".toggle-icon").textContent = open ? "^" : "v";
+}
+
 fileInput.addEventListener("change", () => setFile(fileInput.files[0]));
+previousFileInput.addEventListener("change", () => setPreviousFile(previousFileInput.files[0]));
 worksheetSelect.addEventListener("change", inspectWorkbook);
+previousWorksheetSelect.addEventListener("change", inspectPreviousWorkbook);
+previousSectionToggle.addEventListener("click", () => {
+  setPreviousSectionOpen(previousSectionBody.classList.contains("hidden"));
+});
 
 dropZone.addEventListener("dragover", (event) => {
   event.preventDefault();
@@ -186,6 +250,48 @@ dropZone.addEventListener("drop", (event) => {
     setFile(event.dataTransfer.files[0]);
   }
 });
+
+previousDropZone.addEventListener("dragover", (event) => {
+  event.preventDefault();
+  previousDropZone.classList.add("dragging");
+});
+
+previousDropZone.addEventListener("dragleave", () => previousDropZone.classList.remove("dragging"));
+previousDropZone.addEventListener("drop", (event) => {
+  event.preventDefault();
+  previousDropZone.classList.remove("dragging");
+  if (event.dataTransfer.files.length) {
+    previousFileInput.files = event.dataTransfer.files;
+    setPreviousFile(event.dataTransfer.files[0]);
+  }
+});
+
+async function inspectPreviousWorkbook() {
+  if (!previousFile) return;
+  setError("");
+  const formData = new FormData();
+  formData.append("previousFile", previousFile);
+  if (previousWorksheetSelect.value) formData.append("previousWorksheet", previousWorksheetSelect.value);
+  const response = await fetch("/api/inspect-previous", { method: "POST", body: formData });
+  const data = await response.json();
+  if (!response.ok) {
+    setError(data.error || "Unable to inspect previous allocation workbook.");
+    return;
+  }
+  previousWorksheetSelect.innerHTML = "";
+  data.worksheets.forEach((sheet) => {
+    const option = document.createElement("option");
+    option.value = sheet;
+    option.textContent = sheet;
+    option.selected = sheet === data.selectedWorksheet;
+    previousWorksheetSelect.appendChild(option);
+  });
+  previousApplicantCount.value = data.applicantCount;
+  if (!data.hasGeneratedColumns) {
+    setError(`Previous worksheet is missing generated columns: ${data.missingColumns.join(", ")}`);
+  }
+  renderValidation();
+}
 
 document.querySelectorAll("input, select").forEach((element) => {
   element.addEventListener("input", renderValidation);
@@ -205,9 +311,20 @@ function renderResults(analytics) {
     ["Total mentors", analytics.total_mentors],
     ["Group 1 max participants per mentor", analytics.groups["Group 1"].final_capacity_per_mentor],
     ["Group 2 max participants per mentor", analytics.groups["Group 2"].final_capacity_per_mentor],
+    ["Previously allocated rows", analytics.previous_allocation_rows],
+    ["Existing applicants matched", analytics.matched_existing_applicants],
+    ["New applicants allocated", analytics.new_applicants_allocated],
     ["Unallocated applicants", analytics.total_unsuccessful_applicants],
   ];
   summaryCards.innerHTML = cards.map(([label, value]) => `<div class="card"><span>${label}</span><strong>${value}</strong></div>`).join("");
+  if (analytics.capacity_warnings && analytics.capacity_warnings.length) {
+    summaryCards.innerHTML += analytics.capacity_warnings.map((item) => `
+      <div class="card warning-card">
+        <span>${item.group} ${item.domain} over expected capacity</span>
+        <strong>+${item.over_by}</strong>
+      </div>
+    `).join("");
+  }
   resultsSection.classList.remove("hidden");
 }
 
@@ -223,6 +340,8 @@ generateButton.addEventListener("click", async () => {
   formData.append("maxApplicants", maxApplicants.value);
   formData.append("totalMentors", totalMentors.value);
   formData.append("mentorCounts", JSON.stringify(mentorCounts()));
+  if (previousFile) formData.append("previousFile", previousFile);
+  if (previousFile && previousWorksheetSelect.value) formData.append("previousWorksheet", previousWorksheetSelect.value);
 
   try {
     const response = await fetch("/api/process", { method: "POST", body: formData });
