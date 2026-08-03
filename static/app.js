@@ -45,6 +45,27 @@ let previousFile = null;
 let inspectData = null;
 let downloadUrl = null;
 
+function setupScrollAnimations() {
+  const animatedItems = document.querySelectorAll(".notice, .panel, .site-footer");
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    animatedItems.forEach((item) => item.classList.add("is-visible"));
+    return;
+  }
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        entry.target.classList.toggle("is-visible", entry.isIntersecting);
+      });
+    },
+    { threshold: 0.12, rootMargin: "0px 0px -8% 0px" }
+  );
+  animatedItems.forEach((item) => {
+    item.classList.add("scroll-fade");
+    observer.observe(item);
+  });
+}
+
+
 function clearDownloadState() {
   if (downloadUrl) URL.revokeObjectURL(downloadUrl);
   downloadUrl = null;
@@ -432,3 +453,4 @@ generateButton.addEventListener("click", async () => {
 });
 
 renderValidation();
+setupScrollAnimations();

@@ -704,6 +704,25 @@ th {
   margin: 0 0 8px;
 }
 
+.scroll-fade {
+  opacity: 0.35;
+  transform: translateY(18px);
+  transition: opacity 420ms ease, transform 420ms ease;
+}
+
+.scroll-fade.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scroll-fade {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+}
+
 @media (max-width: 860px) {
   .two,
   .three,
