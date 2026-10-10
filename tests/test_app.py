@@ -111,26 +111,35 @@ def test_normal_top_two_allocation():
     assert output.loc[0, "Subdomain Allocation 2"] == "Quantum Computing"
 
 
-def test_first_choice_at_capacity_uses_second_choice():
+def test_best_two_preferences_are_balanced_between_rounds():
     applicants, _ = build_applicants(fake_df(6, [("Cybersecurity", "Quantum Computing", "Cloud Computing")]), MAPPINGS)
     result = allocate_group(applicants, {"Cybersecurity": 1, "Quantum Computing": 2, "Cloud Computing": 2, "Artificial Intelligence": 2})
-    sixth = result["allocations"][5]
-    assert sixth["allocation_1"] == "Quantum Computing"
+    for allocation in result["allocations"]:
+        assert {allocation["allocation_1"], allocation["allocation_2"]} == {"Cybersecurity", "Quantum Computing"}
+    assert result["rounds"]["Allocation 1"]["usage"]["Cybersecurity"] == 3
+    assert result["rounds"]["Allocation 2"]["usage"]["Cybersecurity"] == 3
 
 
 def test_second_choice_at_capacity_uses_third_choice():
     prefs = [("Cybersecurity", "Quantum Computing", "Cloud Computing")]
-    applicants, _ = build_applicants(fake_df(6, prefs), MAPPINGS)
+    applicants, _ = build_applicants(fake_df(11, prefs), MAPPINGS)
     result = allocate_group(applicants, {"Cybersecurity": 2, "Quantum Computing": 1, "Cloud Computing": 2, "Artificial Intelligence": 2})
-    sixth = result["allocations"][5]
-    assert sixth["allocation_2"] == "Cloud Computing"
+    eleventh = result["allocations"][10]
+    assert "Cloud Computing" in {eleventh["allocation_1"], eleventh["allocation_2"]}
 
 
 def test_all_ranked_preferences_unavailable_uses_available_subdomain():
     prefs = [("Cybersecurity", "Quantum Computing", "Cloud Computing")]
-    applicants, _ = build_applicants(fake_df(6, prefs), MAPPINGS)
-    result = allocate_group(applicants, {"Cybersecurity": 1, "Quantum Computing": 1, "Cloud Computing": 1, "Artificial Intelligence": 2})
-    assert result["allocations"][5]["allocation_2"] == "Artificial Intelligence"
+    applicants, _ = build_applicants(fake_df(4, prefs), MAPPINGS)
+    result = allocate_group(
+        applicants,
+        {"Cybersecurity": 1, "Quantum Computing": 1, "Cloud Computing": 1, "Artificial Intelligence": 2},
+        starting_capacity_per_mentor=1,
+    )
+    assert any(
+        "Artificial Intelligence" in {allocation["allocation_1"], allocation["allocation_2"]}
+        for allocation in result["allocations"]
+    )
     assert result["fallback_count"] >= 1
 
 
@@ -177,7 +186,7 @@ def test_only_one_subdomain_with_mentors_rejected():
         validate_config(400, 3, {"Cybersecurity": 3, "Quantum Computing": 0, "Cloud Computing": 0, "Artificial Intelligence": 0})
 
 
-@pytest.mark.parametrize("count,expected", [(6, 6), (7, 7)])
+@pytest.mark.parametrize("count,expected", [(10, 5), (11, 6), (13, 7)])
 def test_capacity_expands_as_needed(count, expected):
     applicants, _ = build_applicants(fake_df(count), MAPPINGS)
     result = allocate_group(applicants, {"Cybersecurity": 1, "Quantum Computing": 1, "Cloud Computing": 0, "Artificial Intelligence": 0})
@@ -186,24 +195,57 @@ def test_capacity_expands_as_needed(count, expected):
 
 def test_groups_can_have_different_final_capacity_limits():
     mentors = {"Cybersecurity": 1, "Quantum Computing": 1, "Cloud Computing": 0, "Artificial Intelligence": 0}
-    _, analytics, _ = process_allocation(fake_df(13), MAPPINGS, 400, 2, mentors)
-    assert analytics["groups"]["Group 1"]["final_capacity_per_mentor"] == 7
-    assert analytics["groups"]["Group 2"]["final_capacity_per_mentor"] == 6
+    _, analytics, _ = process_allocation(fake_df(21), MAPPINGS, 400, 2, mentors)
+    assert analytics["groups"]["Group 1"]["final_capacity_per_mentor"] == 6
+    assert analytics["groups"]["Group 2"]["final_capacity_per_mentor"] == 5
 
 
 def test_capacity_is_reused_between_groups():
     mentors = {"Cybersecurity": 1, "Quantum Computing": 1, "Cloud Computing": 0, "Artificial Intelligence": 0}
     _, analytics, _ = process_allocation(fake_df(10), MAPPINGS, 400, 2, mentors)
-    assert analytics["groups"]["Group 1"]["capacity"]["Cybersecurity"] == 5
-    assert analytics["groups"]["Group 2"]["capacity"]["Cybersecurity"] == 5
+    assert analytics["groups"]["Group 1"]["capacity"]["Cybersecurity"] == 10
+    assert analytics["groups"]["Group 2"]["capacity"]["Cybersecurity"] == 10
+    assert analytics["groups"]["Group 1"]["rounds"]["Allocation 1"]["capacity"]["Cybersecurity"] == 5
+    assert analytics["groups"]["Group 2"]["rounds"]["Allocation 2"]["capacity"]["Cybersecurity"] == 5
 
 
 def test_no_capacity_limit_exceeded_and_allocations_are_distinct():
     output, analytics, _ = process_allocation(fake_df(50), MAPPINGS, 400, 8, MENTORS)
     assert (output["Subdomain Allocation 1"] != output["Subdomain Allocation 2"]).all()
     for group in ["Group 1", "Group 2"]:
-        for domain in DOMAIN_ORDER:
-            assert analytics["groups"][group]["usage"][domain] <= analytics["groups"][group]["capacity"][domain]
+        for round_name in ["Allocation 1", "Allocation 2"]:
+            for domain in DOMAIN_ORDER:
+                round_data = analytics["groups"][group]["rounds"][round_name]
+                assert round_data["usage"][domain] <= round_data["capacity"][domain]
+
+
+def test_round_order_minimises_subdomain_attendance_difference():
+    applicants, _ = build_applicants(
+        fake_df(20, [("Cybersecurity", "Quantum Computing", "Cloud Computing")]),
+        MAPPINGS,
+    )
+    result = allocate_group(applicants, MENTORS)
+
+    for domain in ["Cybersecurity", "Quantum Computing"]:
+        round_1 = result["rounds"]["Allocation 1"]["usage"][domain]
+        round_2 = result["rounds"]["Allocation 2"]["usage"][domain]
+        assert abs(round_1 - round_2) <= 1
+
+
+def test_each_round_has_its_own_mentor_capacity():
+    applicants, _ = build_applicants(
+        fake_df(10, [("Cybersecurity", "Quantum Computing", "Cloud Computing")]),
+        MAPPINGS,
+    )
+    result = allocate_group(
+        applicants,
+        {"Cybersecurity": 1, "Quantum Computing": 1, "Cloud Computing": 0, "Artificial Intelligence": 0},
+    )
+
+    assert result["rounds"]["Allocation 1"]["capacity"]["Cybersecurity"] == 5
+    assert result["rounds"]["Allocation 2"]["capacity"]["Cybersecurity"] == 5
+    assert result["capacity"]["Cybersecurity"] == 10
+    assert result["final_capacity_per_mentor"] == 5
 
 
 def test_deterministic_repeated_output():
@@ -312,6 +354,7 @@ def test_previous_allocation_inspect_returns_worksheet_and_count():
     assert data["hasGeneratedColumns"] is True
     assert data["snapshot"]["groups"]["Group 1"]["participants"] == 2
     assert set(data["snapshot"]["groups"]["Group 1"]["usage"]) == set(DOMAIN_ORDER)
+    assert set(data["snapshot"]["groups"]["Group 1"]["rounds"]) == {"Allocation 1", "Allocation 2"}
 
 
 def test_previous_inspect_lists_rows_missing_from_current_upload():
@@ -493,8 +536,27 @@ def test_previous_only_rows_are_appended_to_final_output():
     assert output.iloc[2]["Subdomain Allocation 1"] == previous_allocated.iloc[2]["Subdomain Allocation 1"]
 
 
+def test_previous_only_rows_seed_their_saved_round_capacity():
+    previous, _, _ = process_allocation(
+        fake_df(1, [("Cybersecurity", "Quantum Computing", "Cloud Computing")]),
+        MAPPINGS,
+        400,
+        8,
+        MENTORS,
+    )
+    current = fake_df(2, [("Cybersecurity", "Quantum Computing", "Cloud Computing")])
+    current["Mobile Number"] = ["091111111", "092222222"]
+    current["Personal Email"] = ["new1@example.com", "new2@example.com"]
+
+    output, _, _ = process_allocation(current, MAPPINGS, 400, 8, MENTORS, previous)
+
+    group_1_new = output[output["Applicant Number"] == 3].iloc[0]
+    assert group_1_new["Subdomain Allocation 1"] == "Quantum Computing"
+    assert group_1_new["Subdomain Allocation 2"] == "Cybersecurity"
+
+
 def test_decreased_capacity_warns_without_changing_existing_allocations():
-    previous = fake_df(12, [("Cybersecurity", "Quantum Computing", "Cloud Computing")])
+    previous = fake_df(22, [("Cybersecurity", "Quantum Computing", "Cloud Computing")])
     previous_allocated, _, _ = process_allocation(previous, MAPPINGS, 400, 8, MENTORS)
     new_upload = previous.copy()
     reduced_mentors = {

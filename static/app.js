@@ -197,7 +197,7 @@ function renderValidation() {
   const group1 = Math.ceil(applicants / 2);
   const group2 = Math.floor(applicants / 2);
   const initialTotalCapacity = sum * 5;
-  const likelyExpansion = Math.max(group1, group2) * 2 > initialTotalCapacity;
+  const likelyExpansion = Math.max(group1, group2) > initialTotalCapacity;
   const mappings = mappingValues();
   const mapped = mappings.first && mappings.second && mappings.third && new Set(Object.values(mappings)).size === 3;
   const validConfig = selectedFile && mapped && max > 0 && applicants > 0 && applicants <= max && total > 0 && sum === total && activeDomains >= 2 && Object.values(counts).every((value) => value >= 0);
@@ -211,12 +211,12 @@ function renderValidation() {
     <div class="validation-row compact"><span>Previous allocation rows</span><strong>${previousRows}</strong></div>
     <div class="validation-row compact"><span>Estimated Group 1 size</span><strong>${group1}</strong></div>
     <div class="validation-row compact"><span>Estimated Group 2 size</span><strong>${group2}</strong></div>
-    ${domains.map((domain) => `<div class="validation-row compact"><span>${domain} initial capacity</span><strong>${counts[domain] * 5}</strong></div>`).join("")}
-    <div class="validation-row compact"><span>Initial total capacity per group</span><strong>${initialTotalCapacity}</strong></div>
+    ${domains.map((domain) => `<div class="validation-row compact"><span>${domain} capacity per round</span><strong>${counts[domain] * 5}</strong></div>`).join("")}
+    <div class="validation-row compact"><span>Initial total capacity per group per round</span><strong>${initialTotalCapacity}</strong></div>
     <div class="validation-row full">
       <span class="label-with-info">
         Capacity expansion likely
-        <span class="info-icon" tabindex="0" aria-label="Capacity expansion information" data-tooltip="The app starts with 5 participants per mentor. If that is not enough to allocate everyone, it automatically tries 6, then 7, and so on until allocation is possible.">i</span>
+        <span class="info-icon" tabindex="0" aria-label="Capacity expansion information" data-tooltip="Each 30-minute round starts with 5 participants per mentor. If that is not enough, the app tries 6, then 7, and so on while balancing both rounds.">i</span>
       </span>
       <strong class="${likelyExpansion ? "warn" : "ok"}">${likelyExpansion ? "Yes" : "No"}</strong>
     </div>
@@ -390,7 +390,9 @@ function renderPreviousSnapshot(snapshot) {
     const groupData = snapshot.groups[group];
     cards.push([`${group} total pax`, groupData.participants]);
     domains.forEach((domain) => {
-      cards.push([`${group} ${domain}`, groupData.usage[domain]]);
+      const round1 = groupData.rounds ? groupData.rounds["Allocation 1"][domain] : 0;
+      const round2 = groupData.rounds ? groupData.rounds["Allocation 2"][domain] : 0;
+      cards.push([`${group} ${domain} (Round 1 / Round 2)`, `${round1} / ${round2}`]);
     });
   });
   previousSnapshotCards.innerHTML = cards
@@ -449,8 +451,8 @@ function renderResults(analytics) {
     ["Group 1 size", analytics.groups["Group 1"].count],
     ["Group 2 size", analytics.groups["Group 2"].count],
     ["Total mentors", analytics.total_mentors],
-    ["Group 1 max participants per mentor", analytics.groups["Group 1"].final_capacity_per_mentor],
-    ["Group 2 max participants per mentor", analytics.groups["Group 2"].final_capacity_per_mentor],
+    ["Group 1 max participants per mentor per round", analytics.groups["Group 1"].final_capacity_per_mentor],
+    ["Group 2 max participants per mentor per round", analytics.groups["Group 2"].final_capacity_per_mentor],
     ["Previously allocated rows", analytics.previous_allocation_rows],
     ["Existing applicants matched", analytics.matched_existing_applicants],
     ["New applicants allocated", analytics.new_applicants_allocated],
@@ -461,7 +463,7 @@ function renderResults(analytics) {
   if (analytics.capacity_warnings && analytics.capacity_warnings.length) {
     summaryCards.innerHTML += analytics.capacity_warnings.map((item) => `
       <div class="card warning-card">
-        <span>${item.group} ${item.domain} over expected capacity</span>
+        <span>${item.group} ${item.round} ${item.domain} over expected capacity</span>
         <strong>+${item.over_by}</strong>
       </div>
     `).join("");

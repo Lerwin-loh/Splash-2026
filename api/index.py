@@ -19,6 +19,7 @@ DOMAIN_ORDER = [
     "Cloud Computing",
     "Artificial Intelligence",
 ]
+ROUND_ORDER = ["Allocation 1", "Allocation 2"]
 
 GENERATED_COLUMNS = [
     "Applicant Number",
@@ -159,13 +160,17 @@ def previous_allocation_snapshot(df):
     for group in ["Group 1", "Group 2"]:
         group_df = df[df["Grouping"].astype(str).str.strip() == group]
         usage = {domain: 0 for domain in DOMAIN_ORDER}
-        for column in ["Subdomain Allocation 1", "Subdomain Allocation 2"]:
+        round_usage = empty_round_usage()
+        for round_name in ROUND_ORDER:
+            column = f"Subdomain {round_name}"
             for value in group_df[column].astype(str).str.strip():
                 if value in usage:
                     usage[value] += 1
+                    round_usage[round_name][value] += 1
         groups[group] = {
             "participants": int(len(group_df)),
             "usage": usage,
+            "rounds": round_usage,
         }
     return {"groups": groups}
 
@@ -353,45 +358,94 @@ def build_applicants(df, mappings):
     return applicants, warnings
 
 
-def choose_fallback(allocated, usage, capacity):
-    candidates = []
+def empty_round_usage():
+    return {round_name: {domain: 0 for domain in DOMAIN_ORDER} for round_name in ROUND_ORDER}
+
+
+def copy_round_usage(usage):
+    return {
+        round_name: {domain: int(usage.get(round_name, {}).get(domain, 0)) for domain in DOMAIN_ORDER}
+        for round_name in ROUND_ORDER
+    }
+
+
+def aggregate_round_values(values):
+    return {
+        domain: sum(values[round_name][domain] for round_name in ROUND_ORDER)
+        for domain in DOMAIN_ORDER
+    }
+
+
+def projected_balance_score(usage, allocation_1, allocation_2):
+    score = 0
     for domain in DOMAIN_ORDER:
-        if domain in allocated or capacity[domain] <= 0 or usage[domain] >= capacity[domain]:
-            continue
-        remaining_percent = (capacity[domain] - usage[domain]) / capacity[domain]
-        candidates.append((-remaining_percent, DOMAIN_ORDER.index(domain), domain))
-    if not candidates:
-        return None
-    return sorted(candidates)[0][2]
+        round_1 = usage["Allocation 1"][domain] + (1 if domain == allocation_1 else 0)
+        round_2 = usage["Allocation 2"][domain] + (1 if domain == allocation_2 else 0)
+        score += abs(round_1 - round_2)
+    return score
+
+
+def allocation_candidates(applicant, usage, capacity):
+    preferences = applicant["preferences"]
+    preference_positions = {domain: index for index, domain in enumerate(preferences)}
+    active_domains = [domain for domain in DOMAIN_ORDER if capacity[domain] > 0]
+    candidates = []
+
+    for first_index, first_domain in enumerate(active_domains):
+        for second_index in range(first_index + 1, len(active_domains)):
+            second_domain = active_domains[second_index]
+            selected = [first_domain, second_domain]
+            fallback_slots = sum(domain not in preference_positions for domain in selected)
+            preference_score = sum(preference_positions.get(domain, len(DOMAIN_ORDER)) for domain in selected)
+
+            for orientation_index, (allocation_1, allocation_2) in enumerate(
+                [(first_domain, second_domain), (second_domain, first_domain)]
+            ):
+                if usage["Allocation 1"][allocation_1] >= capacity[allocation_1]:
+                    continue
+                if usage["Allocation 2"][allocation_2] >= capacity[allocation_2]:
+                    continue
+                balance_score = projected_balance_score(usage, allocation_1, allocation_2)
+                load_score = (
+                    (usage["Allocation 1"][allocation_1] + 1) / capacity[allocation_1]
+                    + (usage["Allocation 2"][allocation_2] + 1) / capacity[allocation_2]
+                )
+                candidates.append(
+                    (
+                        fallback_slots,
+                        preference_score,
+                        balance_score,
+                        load_score,
+                        first_index,
+                        second_index,
+                        orientation_index,
+                        allocation_1,
+                        allocation_2,
+                    )
+                )
+    return candidates
 
 
 def try_allocate(applicants, mentor_counts, capacity_per_mentor, initial_usage=None):
     capacity = {domain: mentor_counts[domain] * capacity_per_mentor for domain in DOMAIN_ORDER}
-    usage = (initial_usage or {domain: 0 for domain in DOMAIN_ORDER}).copy()
+    usage = copy_round_usage(initial_usage or empty_round_usage())
     allocations = []
 
     for applicant in applicants:
-        allocated = []
-        fallback_slots = 0
-        for _slot in range(2):
-            chosen = None
-            for preference in applicant["preferences"]:
-                if preference not in allocated and capacity[preference] > 0 and usage[preference] < capacity[preference]:
-                    chosen = preference
-                    break
-            if chosen is None:
-                chosen = choose_fallback(allocated, usage, capacity)
-                if chosen:
-                    fallback_slots += 1
-            if not chosen:
-                return None
-            usage[chosen] += 1
-            allocated.append(chosen)
+        candidates = allocation_candidates(applicant, usage, capacity)
+        if not candidates:
+            return None
+        chosen = min(candidates)
+        fallback_slots = chosen[0]
+        allocation_1 = chosen[-2]
+        allocation_2 = chosen[-1]
+        usage["Allocation 1"][allocation_1] += 1
+        usage["Allocation 2"][allocation_2] += 1
         allocations.append(
             {
                 "applicant_number": applicant["applicant_number"],
-                "allocation_1": allocated[0],
-                "allocation_2": allocated[1],
+                "allocation_1": allocation_1,
+                "allocation_2": allocation_2,
                 "fallback_slots": fallback_slots,
             }
         )
@@ -399,12 +453,16 @@ def try_allocate(applicants, mentor_counts, capacity_per_mentor, initial_usage=N
 
 
 def allocate_group(applicants, mentor_counts, starting_capacity_per_mentor=5, initial_usage=None):
-    initial_usage = initial_usage or {domain: 0 for domain in DOMAIN_ORDER}
+    initial_usage = copy_round_usage(initial_usage or empty_round_usage())
     if not applicants:
         capacity = {domain: mentor_counts[domain] * starting_capacity_per_mentor for domain in DOMAIN_ORDER}
-        return allocation_result([], starting_capacity_per_mentor, initial_usage.copy(), capacity, 0, 0, [])
+        return allocation_result([], starting_capacity_per_mentor, initial_usage, capacity, 0, 0, [])
 
-    existing_allocations = sum(initial_usage.values())
+    existing_allocations = sum(
+        initial_usage[round_name][domain]
+        for round_name in ROUND_ORDER
+        for domain in DOMAIN_ORDER
+    )
     max_needed = max(starting_capacity_per_mentor, existing_allocations + len(applicants) * 2)
     for capacity_per_mentor in range(starting_capacity_per_mentor, max_needed + 1):
         result = try_allocate(applicants, mentor_counts, capacity_per_mentor, initial_usage)
@@ -423,18 +481,41 @@ def allocate_group(applicants, mentor_counts, starting_capacity_per_mentor=5, in
         return allocation_result(allocations, capacity_per_mentor, usage, capacity, fallback_count, 0, warnings)
 
     warnings = [make_warning(applicant, "Unable to allocate", "The applicant could not receive two distinct subdomains.") for applicant in applicants]
-    empty_usage = {domain: 0 for domain in DOMAIN_ORDER}
+    empty_usage = empty_round_usage()
     final_capacity = {domain: mentor_counts[domain] * max_needed for domain in DOMAIN_ORDER}
     return allocation_result([], max_needed, empty_usage, final_capacity, 0, len(applicants), warnings)
 
 
 def allocation_result(allocations, final_limit, usage, capacity, fallback_count, unallocated_count, warnings):
+    round_capacity = {round_name: capacity.copy() for round_name in ROUND_ORDER}
+    total_usage = aggregate_round_values(usage)
+    total_capacity = aggregate_round_values(round_capacity)
+    rounds = {}
+    for round_name in ROUND_ORDER:
+        rounds[round_name] = {
+            "usage": usage[round_name],
+            "capacity": round_capacity[round_name],
+            "remaining": {
+                domain: round_capacity[round_name][domain] - usage[round_name][domain]
+                for domain in DOMAIN_ORDER
+            },
+            "utilisation": {
+                domain: round(
+                    (usage[round_name][domain] / round_capacity[round_name][domain]) * 100,
+                    1,
+                )
+                if round_capacity[round_name][domain]
+                else 0
+                for domain in DOMAIN_ORDER
+            },
+        }
     return {
         "allocations": allocations,
         "final_capacity_per_mentor": final_limit,
-        "usage": usage,
-        "capacity": capacity,
-        "remaining": {domain: capacity[domain] - usage[domain] for domain in DOMAIN_ORDER},
+        "usage": total_usage,
+        "capacity": total_capacity,
+        "remaining": {domain: total_capacity[domain] - total_usage[domain] for domain in DOMAIN_ORDER},
+        "rounds": rounds,
         "fallback_count": fallback_count,
         "unallocated_count": unallocated_count,
         "warnings": warnings,
@@ -466,36 +547,39 @@ def previous_record_key(record):
 
 def usage_from_existing(existing_records):
     usage = {
-        "Group 1": {domain: 0 for domain in DOMAIN_ORDER},
-        "Group 2": {domain: 0 for domain in DOMAIN_ORDER},
+        "Group 1": empty_round_usage(),
+        "Group 2": empty_round_usage(),
     }
     for record in existing_records:
         group = str(record.get("Grouping", "")).strip()
         if group not in usage:
             continue
-        for column in ["Subdomain Allocation 1", "Subdomain Allocation 2"]:
+        for round_name in ROUND_ORDER:
+            column = f"Subdomain {round_name}"
             domain = str(record.get(column, "")).strip()
             if domain in DOMAIN_ORDER:
-                usage[group][domain] += 1
+                usage[group][round_name][domain] += 1
     return usage
 
 
 def build_existing_capacity_warnings(existing_usage, mentor_counts, capacity_per_mentor=5):
     warnings = []
     for group, usage in existing_usage.items():
-        for domain in DOMAIN_ORDER:
-            expected_capacity = mentor_counts[domain] * capacity_per_mentor
-            over_by = usage[domain] - expected_capacity
-            if over_by > 0:
-                warnings.append(
-                    {
-                        "group": group,
-                        "domain": domain,
-                        "usage": usage[domain],
-                        "capacity": expected_capacity,
-                        "over_by": over_by,
-                    }
-                )
+        for round_name in ROUND_ORDER:
+            for domain in DOMAIN_ORDER:
+                expected_capacity = mentor_counts[domain] * capacity_per_mentor
+                over_by = usage[round_name][domain] - expected_capacity
+                if over_by > 0:
+                    warnings.append(
+                        {
+                            "group": group,
+                            "round": round_name,
+                            "domain": domain,
+                            "usage": usage[round_name][domain],
+                            "capacity": expected_capacity,
+                            "over_by": over_by,
+                        }
+                    )
     return warnings
 
 
@@ -535,7 +619,8 @@ def process_allocation(df, mappings, max_applicants, total_mentors, mentor_count
         applicant["group"] = "Group 1" if next_new_number % 2 == 1 else "Group 2"
         new_applicants.append(applicant)
 
-    existing_usage = usage_from_existing(existing_records)
+    capacity_records = previous_df.to_dict(orient="records") if previous_df is not None else existing_records
+    existing_usage = usage_from_existing(capacity_records)
     group_applicants = {
         "Group 1": [applicant for applicant in new_applicants if applicant["group"] == "Group 1"],
         "Group 2": [applicant for applicant in new_applicants if applicant["group"] == "Group 2"],
@@ -615,6 +700,7 @@ def build_analytics(applicants, total_mentors, mentor_counts, group_results, max
             "capacity": result["capacity"],
             "remaining": result["remaining"],
             "utilisation": utilisation,
+            "rounds": result["rounds"],
         }
     return {
         "total_applicants": len(applicants),
@@ -643,9 +729,9 @@ def make_summary_rows(analytics):
         ("Quantum Computing mentors", analytics["mentor_counts"]["Quantum Computing"]),
         ("Cloud Computing mentors", analytics["mentor_counts"]["Cloud Computing"]),
         ("Artificial Intelligence mentors", analytics["mentor_counts"]["Artificial Intelligence"]),
-        ("Initial participants per mentor", analytics["initial_capacity_per_mentor"]),
-        ("Group 1 final participants per mentor", analytics["groups"]["Group 1"]["final_capacity_per_mentor"]),
-        ("Group 2 final participants per mentor", analytics["groups"]["Group 2"]["final_capacity_per_mentor"]),
+        ("Initial participants per mentor per round", analytics["initial_capacity_per_mentor"]),
+        ("Group 1 final participants per mentor per round", analytics["groups"]["Group 1"]["final_capacity_per_mentor"]),
+        ("Group 2 final participants per mentor per round", analytics["groups"]["Group 2"]["final_capacity_per_mentor"]),
         ("Previous allocation rows read", analytics["previous_allocation_rows"]),
         ("Existing applicants matched", analytics["matched_existing_applicants"]),
         ("New applicants allocated", analytics["new_applicants_allocated"]),

@@ -58,13 +58,15 @@ Group 2 attends:
 
 `Mentoring -> Panel Discussion`
 
-Each applicant receives two different mentoring subdomains. The app tries ranked preferences first, then uses a deterministic fallback based on the greatest remaining capacity percentage.
+Each applicant receives two different mentoring subdomains. The app tries ranked preferences first and then uses a deterministic fallback when needed. After selecting the two subdomains, it considers both possible round orders and chooses the order that keeps subdomain attendance across the two rounds as even as possible.
 
 Mentor names are not needed. Mentor counts only define capacity:
 
-`subdomain capacity = mentors in subdomain x participants per mentor`
+`subdomain capacity per round = mentors in subdomain x participants per mentor`
 
-The starting participants-per-mentor limit is 5. If a group cannot be fully allocated, the app increases the limit by 1 and retries. Group 1 and Group 2 are calculated independently because the same mentor capacity is reused across the two mentoring sessions.
+`Subdomain Allocation 1` is the first 30-minute mentoring round and `Subdomain Allocation 2` is the second. The same mentors remain in their subdomain, so each round receives its own capacity. For example, 8 mentors at 5 participants each provide 40 places in Allocation 1 and another 40 places in Allocation 2.
+
+The starting participants-per-mentor limit is 5 per round. If a group cannot be fully allocated, the app increases the limit by 1 and retries. Group 1 and Group 2 are calculated independently because the same mentor capacity is reused when they attend mentoring at different times.
 
 ## Batch Continuation
 
@@ -72,7 +74,7 @@ When processing registrations in batches, upload the newest registration workboo
 
 The app reads the previous workbook row by row from the `Allocated Applicants` sheet. It does not rely on old summary statistics. If rows were manually removed from the previous workbook, those removed rows no longer count.
 
-Applicants are matched only when surname, given name, mobile number, and personal email all match after normalisation. Existing matched applicants keep their previous generated allocation fields exactly as-is. Those fields are never recalculated or changed during batch continuation. Only new unmatched applicants are allocated. If the previous allocation workbook contains allocated rows that are missing from the current registration upload, those previous-only rows are appended to the final workbook unchanged.
+Applicants are matched using normalised mobile number and personal email. Existing matched applicants keep their previous generated allocation fields exactly as-is. Those fields are never recalculated or changed during batch continuation. Only new unmatched applicants are allocated. If the previous allocation workbook contains allocated rows that are missing from the current registration upload, those previous-only rows are appended to the final workbook unchanged and count toward their saved round capacities.
 
 Current mentor counts from the frontend are always used. If mentor capacity has increased, new capacity is available for new applicants. If mentor capacity has decreased, existing allocations are not changed; the app reports capacity warnings when previous allocations already exceed the expected capacity.
 
