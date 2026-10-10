@@ -194,18 +194,53 @@ def find_column(columns, aliases):
     return None
 
 
+def normalize_email(value):
+    return str(value).strip().lower()
+
+
+def normalize_mobile(value):
+    mobile = "".join(str(value).strip().split())
+    if mobile.endswith(".0") and mobile[:-2].isdigit():
+        mobile = mobile[:-2]
+    return mobile
+
+
+def identity_columns(columns):
+    mobile_column = find_column(columns, ["mobilenumber", "mobile", "phone", "contactnumber", "contact"])
+    email_column = find_column(columns, ["personalemail", "email", "emailaddress"])
+    return mobile_column, email_column
+
+
 def identity_key(row):
-    mobile_column = find_column(row.index, ["mobilenumber", "mobile", "phone", "contactnumber", "contact"])
-    email_column = find_column(row.index, ["personalemail", "email", "emailaddress"])
-    given_column = find_column(row.index, ["givenname", "firstname"])
-    surname_column = find_column(row.index, ["surname", "lastname", "familyname"])
-    mobile = compact_key(row.get(mobile_column, "")) if mobile_column else ""
-    email = str(row.get(email_column, "")).strip().lower() if email_column else ""
-    given_name = compact_key(row.get(given_column, "")) if given_column else ""
-    surname = compact_key(row.get(surname_column, "")) if surname_column else ""
-    if not all([surname, given_name, mobile, email]):
+    mobile_column, email_column = identity_columns(row.index)
+    if not mobile_column or not email_column:
         return None
-    return (surname, given_name, mobile, email)
+    mobile = normalize_mobile(row.get(mobile_column, ""))
+    email = normalize_email(row.get(email_column, ""))
+    if not mobile and not email:
+        return None
+    return (mobile, email)
+
+
+def validate_unique_identities(df, workbook_name):
+    mobile_column, email_column = identity_columns(df.columns)
+    if not mobile_column or not email_column:
+        raise ValueError(f"The {workbook_name} must contain Mobile Number and Personal Email columns.")
+
+    seen = {}
+    for index, row in df.iterrows():
+        excel_row = int(index) + 2
+        key = identity_key(row)
+        if key is None:
+            raise ValueError(
+                f"The {workbook_name} has both mobile number and personal email blank at Excel row {excel_row}."
+            )
+        if key in seen:
+            raise ValueError(
+                f"The {workbook_name} contains duplicate mobile number and personal email values "
+                f"at Excel rows {seen[key]} and {excel_row}."
+            )
+        seen[key] = excel_row
 
 
 def previous_allocation_lookup(previous_df):
@@ -378,6 +413,21 @@ def generated_values_from_previous(record):
     return {column: str(record.get(column, "")).strip() for column in PRESERVED_ALLOCATION_COLUMNS}
 
 
+def verify_preserved_allocations(output_df, previous_lookup):
+    for index, row in output_df.iterrows():
+        previous_record = previous_lookup.get(identity_key(row))
+        if not previous_record:
+            continue
+        for column in PRESERVED_ALLOCATION_COLUMNS:
+            current_value = str(row.get(column, "")).strip()
+            previous_value = str(previous_record.get(column, "")).strip()
+            if current_value != previous_value:
+                raise ValueError(
+                    f"Existing allocation verification failed at Excel row {int(index) + 2}: "
+                    f"{column} changed from '{previous_value}' to '{current_value}'."
+                )
+
+
 def previous_record_key(record):
     return identity_key(pd.Series(record))
 
@@ -425,6 +475,9 @@ def process_allocation(df, mappings, max_applicants, total_mentors, mentor_count
         raise ValueError(f"The workbook contains {len(df)} applicants, above the configured maximum of {max_applicants}.")
 
     applicants, warnings = build_applicants(df, mappings)
+    validate_unique_identities(df, "current registration workbook")
+    if previous_df is not None:
+        validate_unique_identities(previous_df, "previous allocation workbook")
     previous_lookup, previous_warnings = previous_allocation_lookup(previous_df)
     warnings.extend(previous_warnings)
 
@@ -490,6 +543,8 @@ def process_allocation(df, mappings, max_applicants, total_mentors, mentor_count
     ]
     for column in GENERATED_COLUMNS[1:]:
         output_df[column] = [allocation_lookup.get(applicant["applicant_number"], {}).get(column, "Unable to allocate") for applicant in applicants]
+
+    verify_preserved_allocations(output_df, previous_lookup)
 
     if previous_df is not None:
         missing_previous_rows = []

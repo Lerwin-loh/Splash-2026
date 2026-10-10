@@ -10,9 +10,13 @@ from api.index import (
     allocate_group,
     build_applicants,
     detect_option_columns,
+    identity_key,
+    normalize_email,
+    normalize_mobile,
     normalize_preference,
     process_allocation,
     validate_config,
+    verify_preserved_allocations,
     app,
 )
 
@@ -340,6 +344,75 @@ def test_matched_existing_generated_fields_are_ported_exactly():
         assert str(output.loc[0, column]) == str(first_batch.loc[0, column])
     assert analytics["matched_existing_applicants"] == 1
     assert analytics["new_applicants_allocated"] == 0
+
+
+def test_matching_uses_only_normalized_mobile_and_email():
+    previous, _, _ = process_allocation(fake_df(1), MAPPINGS, 400, 8, MENTORS)
+    previous.loc[0, "Mobile Number"] = "65 8747 7313.0"
+    previous.loc[0, "Personal Email"] = "  PERSON@EXAMPLE.COM  "
+    previous.loc[0, "Grouping"] = "Group 2"
+    previous.loc[0, "Subdomain Allocation 1"] = "Artificial Intelligence"
+    previous.loc[0, "Subdomain Allocation 2"] = "Cloud Computing"
+
+    current = fake_df(1)
+    current.loc[0, "Surname"] = "Completely Different"
+    current.loc[0, "Given Name"] = "Different Name"
+    current.loc[0, "Mobile Number"] = "6587477313"
+    current.loc[0, "Personal Email"] = "person@example.com"
+
+    output, analytics, _ = process_allocation(current, MAPPINGS, 400, 8, MENTORS, previous)
+
+    assert analytics["matched_existing_applicants"] == 1
+    assert analytics["new_applicants_allocated"] == 0
+    assert output.loc[0, "Grouping"] == "Group 2"
+    assert output.loc[0, "Subdomain Allocation 1"] == "Artificial Intelligence"
+    assert output.loc[0, "Subdomain Allocation 2"] == "Cloud Computing"
+
+
+def test_blank_mobile_matches_blank_mobile_when_email_matches():
+    previous, _, _ = process_allocation(fake_df(1), MAPPINGS, 400, 8, MENTORS)
+    previous.loc[0, "Mobile Number"] = ""
+    current = fake_df(1)
+    current.loc[0, "Mobile Number"] = ""
+
+    output, analytics, _ = process_allocation(current, MAPPINGS, 400, 8, MENTORS, previous)
+
+    assert analytics["matched_existing_applicants"] == 1
+    assert analytics["previous_rows_appended"] == 0
+    assert len(output) == 1
+
+
+def test_email_and_mobile_normalizers():
+    assert normalize_email("  Person@Example.COM ") == "person@example.com"
+    assert normalize_mobile("65 8747 7313.0") == "6587477313"
+
+
+def test_duplicate_current_identities_are_rejected():
+    current = fake_df(2)
+    current.loc[1, "Mobile Number"] = current.loc[0, "Mobile Number"]
+    current.loc[1, "Personal Email"] = current.loc[0, "Personal Email"]
+
+    with pytest.raises(ValueError, match="duplicate mobile number and personal email"):
+        process_allocation(current, MAPPINGS, 400, 8, MENTORS)
+
+
+def test_duplicate_previous_identities_are_rejected():
+    previous, _, _ = process_allocation(fake_df(2), MAPPINGS, 400, 8, MENTORS)
+    previous.loc[1, "Mobile Number"] = previous.loc[0, "Mobile Number"]
+    previous.loc[1, "Personal Email"] = previous.loc[0, "Personal Email"]
+
+    with pytest.raises(ValueError, match="duplicate mobile number and personal email"):
+        process_allocation(fake_df(1), MAPPINGS, 400, 8, MENTORS, previous)
+
+
+def test_preservation_verification_rejects_changed_allocation():
+    previous, _, _ = process_allocation(fake_df(1), MAPPINGS, 400, 8, MENTORS)
+    changed = previous.copy()
+    changed.loc[0, "Grouping"] = "Group 2"
+    lookup = {identity_key(previous.loc[0]): previous.loc[0].to_dict()}
+
+    with pytest.raises(ValueError, match="Grouping changed"):
+        verify_preserved_allocations(changed, lookup)
 
 
 def test_previous_allocations_do_not_match_when_mobile_or_email_changes():
