@@ -16,6 +16,10 @@ const clearPreviousFileButton = document.getElementById("clearPreviousFileButton
 const previousWorksheetSelect = document.getElementById("previousWorksheetSelect");
 const previousApplicantCount = document.getElementById("previousApplicantCount");
 const previousSnapshotCards = document.getElementById("previousSnapshotCards");
+const previousOnlySection = document.getElementById("previousOnlySection");
+const previousOnlyExplanation = document.getElementById("previousOnlyExplanation");
+const previousOnlyCount = document.getElementById("previousOnlyCount");
+const previousOnlyTable = document.getElementById("previousOnlyTable");
 const worksheetSelect = document.getElementById("worksheetSelect");
 const applicantCountInput = document.getElementById("applicantCount");
 const columnsBox = document.getElementById("columnsBox");
@@ -92,7 +96,15 @@ function clearPreviousInspection() {
   previousApplicantCount.value = "-";
   previousWorksheetSelect.innerHTML = "";
   previousSnapshotCards.innerHTML = "";
+  clearPreviousOnlyComparison();
   clearDownloadState();
+}
+
+function clearPreviousOnlyComparison() {
+  previousOnlySection.classList.add("hidden");
+  previousOnlyExplanation.textContent = "";
+  previousOnlyCount.textContent = "0";
+  previousOnlyTable.innerHTML = "";
 }
 
 function formatBytes(bytes) {
@@ -242,11 +254,13 @@ async function inspectWorkbook() {
   addOptions(thirdColumn, data.columns, data.suggestedMappings.third);
   renderPreview(data.previewRows, data.columns);
   renderValidation();
+  if (previousFile) inspectPreviousWorkbook();
 }
 
 function setFile(file) {
   selectedFile = file;
   clearCurrentInspection();
+  clearPreviousOnlyComparison();
   dropZone.classList.toggle("has-file", Boolean(file));
   fileName.textContent = file ? file.name : "No file selected";
   fileSize.textContent = file ? formatBytes(file.size) : "";
@@ -341,6 +355,10 @@ async function inspectPreviousWorkbook() {
   const formData = new FormData();
   formData.append("previousFile", previousFile);
   if (previousWorksheetSelect.value) formData.append("previousWorksheet", previousWorksheetSelect.value);
+  if (selectedFile) {
+    formData.append("currentFile", selectedFile);
+    if (worksheetSelect.value) formData.append("currentWorksheet", worksheetSelect.value);
+  }
   const response = await fetch("/api/inspect-previous", { method: "POST", body: formData });
   const data = await response.json();
   if (!response.ok) {
@@ -360,6 +378,7 @@ async function inspectPreviousWorkbook() {
     setSectionError(previousFileError, `Previous worksheet is missing generated columns: ${data.missingColumns.join(", ")}`);
   }
   renderPreviousSnapshot(data.snapshot);
+  renderPreviousOnlyApplicants(data);
   renderValidation();
 }
 
@@ -377,6 +396,41 @@ function renderPreviousSnapshot(snapshot) {
   previousSnapshotCards.innerHTML = cards
     .map(([label, value]) => `<div class="snapshot-card"><span>${label}</span><strong>${value}</strong></div>`)
     .join("");
+}
+
+function renderPreviousOnlyApplicants(data) {
+  clearPreviousOnlyComparison();
+  if (!data.comparisonAvailable) return;
+
+  const rows = data.previousOnlyApplicants || [];
+  previousOnlySection.classList.remove("hidden");
+  previousOnlyCount.textContent = data.previousOnlyCount || 0;
+  previousOnlyExplanation.textContent = rows.length
+    ? `These applicants are in the previous allocation but not the current registration. They will be appended, increasing the final workbook from ${data.currentApplicantCount} to ${data.estimatedFinalCount} rows.`
+    : `Everyone in the previous allocation is present in the current registration. The final workbook will remain at ${data.currentApplicantCount} rows.`;
+
+  if (!rows.length) return;
+  const columns = ["Applicant Number", "Surname", "Given Name", "Mobile Number", "Personal Email", "Grouping"];
+  const thead = document.createElement("thead");
+  const headerRow = document.createElement("tr");
+  columns.forEach((column) => {
+    const th = document.createElement("th");
+    th.textContent = column;
+    headerRow.appendChild(th);
+  });
+  thead.appendChild(headerRow);
+
+  const tbody = document.createElement("tbody");
+  rows.forEach((row) => {
+    const bodyRow = document.createElement("tr");
+    columns.forEach((column) => {
+      const td = document.createElement("td");
+      td.textContent = row[column] || "";
+      bodyRow.appendChild(td);
+    });
+    tbody.appendChild(bodyRow);
+  });
+  previousOnlyTable.append(thead, tbody);
 }
 
 document.querySelectorAll("input, select").forEach((element) => {

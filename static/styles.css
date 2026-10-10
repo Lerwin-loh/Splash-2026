@@ -653,6 +653,56 @@ th {
   font-size: 20px;
 }
 
+.previous-only-section {
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+
+.previous-only-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.previous-only-heading h3 {
+  margin: 0 0 6px;
+  font-size: 17px;
+}
+
+.previous-only-heading .section-help {
+  margin: 0;
+}
+
+.previous-only-total {
+  flex: 0 0 auto;
+  min-width: 104px;
+  padding: 9px 12px;
+  border-left: 3px solid var(--brand);
+  background: #f3f9fd;
+}
+
+.previous-only-total strong,
+.previous-only-total span {
+  display: block;
+}
+
+.previous-only-total strong {
+  color: var(--brand);
+  font-size: 22px;
+}
+
+.previous-only-total span {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.previous-only-wrap {
+  max-height: 320px;
+}
+
 .card {
   border: 1px solid #ead8e7;
   border-radius: 8px;
@@ -730,6 +780,14 @@ th {
   .cards,
   .snapshot-cards {
     grid-template-columns: 1fr;
+  }
+
+  .previous-only-heading {
+    flex-direction: column;
+  }
+
+  .previous-only-total {
+    width: 100%;
   }
 
   .panel {

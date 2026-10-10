@@ -314,6 +314,28 @@ def test_previous_allocation_inspect_returns_worksheet_and_count():
     assert set(data["snapshot"]["groups"]["Group 1"]["usage"]) == set(DOMAIN_ORDER)
 
 
+def test_previous_inspect_lists_rows_missing_from_current_upload():
+    previous, _, _ = process_allocation(fake_df(3), MAPPINGS, 400, 8, MENTORS)
+    response = app.test_client().post(
+        "/api/inspect-previous",
+        data={
+            "previousFile": (workbook_bytes({"Allocated Applicants": previous}), "previous.xlsx"),
+            "currentFile": (workbook_bytes({"Registrations": fake_df(2)}), "current.xlsx"),
+            "currentWorksheet": "Registrations",
+        },
+        content_type="multipart/form-data",
+    )
+
+    assert response.status_code == 200
+    data = response.get_json()
+    assert data["comparisonAvailable"] is True
+    assert data["currentApplicantCount"] == 2
+    assert data["previousOnlyCount"] == 1
+    assert data["estimatedFinalCount"] == 3
+    assert data["previousOnlyApplicants"][0]["Personal Email"] == "applicant3@example.com"
+    assert data["previousOnlyApplicants"][0]["Grouping"] == "Group 1"
+
+
 def test_previous_allocations_are_preserved_for_matched_applicants():
     first_batch, _, _ = process_allocation(fake_df(3), MAPPINGS, 400, 8, MENTORS)
     new_upload = fake_df(4)

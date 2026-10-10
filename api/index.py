@@ -119,7 +119,7 @@ def load_previous_allocations(file_storage, sheet_name=None):
     return df.loc[non_blank].copy()
 
 
-def inspect_previous_allocation(file_storage, sheet_name=None):
+def inspect_previous_allocation(file_storage, sheet_name=None, current_df=None):
     if not file_storage or not file_storage.filename.lower().endswith(".xlsx"):
         raise ValueError("Please upload a valid previous .xlsx allocation workbook.")
     data = BytesIO(file_storage.read())
@@ -136,6 +136,9 @@ def inspect_previous_allocation(file_storage, sheet_name=None):
     missing_columns = [column for column in GENERATED_COLUMNS if column not in df.columns]
     allocated_df = df.loc[non_blank].copy()
     snapshot = previous_allocation_snapshot(allocated_df) if not missing_columns else None
+    previous_only = []
+    if current_df is not None and not missing_columns:
+        previous_only = previous_only_applicants(current_df, allocated_df)
     return {
         "worksheets": excel_file.sheet_names,
         "selectedWorksheet": selected_sheet,
@@ -143,6 +146,11 @@ def inspect_previous_allocation(file_storage, sheet_name=None):
         "hasGeneratedColumns": not missing_columns,
         "missingColumns": missing_columns,
         "snapshot": snapshot,
+        "comparisonAvailable": current_df is not None and not missing_columns,
+        "currentApplicantCount": len(current_df) if current_df is not None else 0,
+        "previousOnlyApplicants": previous_only,
+        "previousOnlyCount": len(previous_only),
+        "estimatedFinalCount": (len(current_df) + len(previous_only)) if current_df is not None else 0,
     }
 
 
@@ -241,6 +249,30 @@ def validate_unique_identities(df, workbook_name):
                 f"at Excel rows {seen[key]} and {excel_row}."
             )
         seen[key] = excel_row
+
+
+def previous_only_applicants(current_df, previous_df):
+    validate_unique_identities(current_df, "current registration workbook")
+    validate_unique_identities(previous_df, "previous allocation workbook")
+    current_keys = {identity_key(row) for _index, row in current_df.iterrows()}
+    rows = []
+    for _index, row in previous_df.iterrows():
+        if identity_key(row) in current_keys:
+            continue
+        mobile_column, email_column = identity_columns(row.index)
+        surname_column = find_column(row.index, ["surname", "lastname", "familyname"])
+        given_column = find_column(row.index, ["givenname", "firstname"])
+        rows.append(
+            {
+                "Applicant Number": str(row.get("Applicant Number", "")).strip(),
+                "Surname": str(row.get(surname_column, "")).strip() if surname_column else "",
+                "Given Name": str(row.get(given_column, "")).strip() if given_column else "",
+                "Mobile Number": str(row.get(mobile_column, "")).strip() if mobile_column else "",
+                "Personal Email": str(row.get(email_column, "")).strip() if email_column else "",
+                "Grouping": str(row.get("Grouping", "")).strip(),
+            }
+        )
+    return rows
 
 
 def previous_allocation_lookup(previous_df):
@@ -697,7 +729,19 @@ def inspect_workbook():
 @app.post("/api/inspect-previous")
 def inspect_previous_workbook():
     try:
-        return jsonify(inspect_previous_allocation(request.files.get("previousFile"), request.form.get("previousWorksheet") or None))
+        current_df = None
+        current_file = request.files.get("currentFile")
+        if current_file and current_file.filename:
+            _, _, current_df = load_sheet(current_file, request.form.get("currentWorksheet") or None)
+            if any(column in current_df.columns for column in GENERATED_COLUMNS):
+                raise ValueError("The current registration upload must be a raw registration workbook.")
+        return jsonify(
+            inspect_previous_allocation(
+                request.files.get("previousFile"),
+                request.form.get("previousWorksheet") or None,
+                current_df,
+            )
+        )
     except ValueError as exc:
         return jsonify({"error": str(exc)}), 400
 
