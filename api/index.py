@@ -50,6 +50,7 @@ PREFERENCE_ALIASES = {
     "cloudcomputing": "Cloud Computing",
     "cloud": "Cloud Computing",
     "artificialintelligence": "Artificial Intelligence",
+    "artificialintelligenceai": "Artificial Intelligence",
     "ai": "Artificial Intelligence",
 }
 

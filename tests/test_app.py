@@ -67,6 +67,7 @@ def workbook_bytes(sheet_frames):
 def test_normalises_reasonable_preference_variations():
     assert normalize_preference("AI") == "Artificial Intelligence"
     assert normalize_preference("Artificial intelligence") == "Artificial Intelligence"
+    assert normalize_preference("Artificial Intelligence (AI)") == "Artificial Intelligence"
     assert normalize_preference("Cloud computing") == "Cloud Computing"
     assert normalize_preference("Cyber security") == "Cybersecurity"
     assert normalize_preference("Quantum computing") == "Quantum Computing"
