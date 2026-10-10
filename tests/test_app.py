@@ -415,6 +415,22 @@ def test_preservation_verification_rejects_changed_allocation():
         verify_preserved_allocations(changed, lookup)
 
 
+def test_new_applicant_number_does_not_overwrite_a_later_matched_row():
+    previous, _, _ = process_allocation(fake_df(3), MAPPINGS, 400, 8, MENTORS)
+    new_row = fake_df(1)
+    new_row.loc[0, "Mobile Number"] = "099999999"
+    new_row.loc[0, "Personal Email"] = "new@example.com"
+    current = pd.concat([new_row, fake_df(3)], ignore_index=True)
+
+    output, analytics, _ = process_allocation(current, MAPPINGS, 400, 8, MENTORS, previous)
+
+    assert analytics["matched_existing_applicants"] == 3
+    assert analytics["new_applicants_allocated"] == 1
+    assert output.loc[0, "Applicant Number"] == 4
+    for column in GENERATED_COLUMNS:
+        assert str(output.loc[3, column]) == str(previous.loc[2, column])
+
+
 def test_previous_allocations_do_not_match_when_mobile_or_email_changes():
     first_batch, _, _ = process_allocation(fake_df(1), MAPPINGS, 400, 8, MENTORS)
     new_upload = fake_df(1)

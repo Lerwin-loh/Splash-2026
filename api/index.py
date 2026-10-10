@@ -495,7 +495,7 @@ def process_allocation(df, mappings, max_applicants, total_mentors, mentor_count
             matched_key = previous_record_key(previous_record)
             if matched_key:
                 matched_previous_keys.add(matched_key)
-            allocation_lookup[applicant["applicant_number"]] = generated_values_from_previous(previous_record)
+            allocation_lookup[applicant["excel_index"]] = generated_values_from_previous(previous_record)
             continue
 
         next_new_number += 1
@@ -527,7 +527,7 @@ def process_allocation(df, mappings, max_applicants, total_mentors, mentor_count
                 status = "Allocated after capacity expansion"
             else:
                 status = "Allocated"
-            allocation_lookup[item["applicant_number"]] = {
+            allocation_lookup[applicant["excel_index"]] = {
                 "Grouping": applicant["group"],
                 "Event Sequence": "Panel Discussion -> Mentoring" if applicant["group"] == "Group 1" else "Mentoring -> Panel Discussion",
                 "Subdomain Allocation 1": item["allocation_1"],
@@ -538,11 +538,11 @@ def process_allocation(df, mappings, max_applicants, total_mentors, mentor_count
 
     output_df = df.copy()
     output_df["Applicant Number"] = [
-        allocation_lookup.get(applicant["applicant_number"], {}).get("Applicant Number", applicant["applicant_number"])
+        allocation_lookup.get(applicant["excel_index"], {}).get("Applicant Number", applicant["applicant_number"])
         for applicant in applicants
     ]
     for column in GENERATED_COLUMNS[1:]:
-        output_df[column] = [allocation_lookup.get(applicant["applicant_number"], {}).get(column, "Unable to allocate") for applicant in applicants]
+        output_df[column] = [allocation_lookup.get(applicant["excel_index"], {}).get(column, "Unable to allocate") for applicant in applicants]
 
     verify_preserved_allocations(output_df, previous_lookup)
 
